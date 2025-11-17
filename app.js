@@ -1,0 +1,627 @@
+// Import Three.js modules
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { loadTexture, loadFrutaluxeCroppedTextures22XU, loadFrutanaJoyCroppedTextures22XU, loadFrutanaCroppedTextures22XU, loadFrutanovaCroppedTextures22XU, loadSindibadCroppedTextures22XU } from './textureLoader.js';
+import { createBoxWithCustomUVs, createBanana } from './boxGeometry.js';
+
+// Three.js Scene Setup
+let scene, camera, renderer, controls;
+let boxGroup, leftFlap, rightFlap, frontFlap, backFlap, boxBody;
+let bananas = []; // Array to hold banana objects
+let dimensionsVisible = false;
+let dimensionsGroup;
+let currentBrand = "FRUTANA";
+let currentBoxType = "22XU";
+let flapsOpen = false;
+
+// Box dimensions based on type (in cm, scaled for 3D)
+// Dimensions extracted from engineering drawings in PDFs (converted from mm to cm)
+const boxDimensions = {
+  "22XU": { width: 5.22, height: 2.36, depth: 3.87, lidHeight: 0.5 },  // 522mm x 236mm x 387mm
+  208: { width: 5.15, height: 2.13, depth: 3.42, lidHeight: 0.5 },     // 515mm x 213mm x 342mm
+};
+
+// Initialize the 3D scene
+function init() {
+  const container = document.getElementById("canvas-container");
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf5f5f5);
+  scene.fog = new THREE.Fog(0xf5f5f5, 50, 200);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+  camera.position.set(15, 8, 15);
+  camera.lookAt(0, 0, 0);
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+
+  // OrbitControls
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+  controls.rotateSpeed = 0.5;
+  controls.minDistance = 8;
+  controls.maxDistance = 40;
+  controls.enablePan = false;
+  controls.autoRotate = false;
+
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(ambientLight);
+
+  const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight1.position.set(20, 30, 20);
+  directionalLight1.castShadow = true;
+  directionalLight1.shadow.mapSize.width = 2048;
+  directionalLight1.shadow.mapSize.height = 2048;
+  directionalLight1.shadow.camera.near = 0.5;
+  directionalLight1.shadow.camera.far = 100;
+  directionalLight1.shadow.camera.left = -15;
+  directionalLight1.shadow.camera.right = 15;
+  directionalLight1.shadow.camera.top = 15;
+  directionalLight1.shadow.camera.bottom = -15;
+  scene.add(directionalLight1);
+
+  const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+  directionalLight2.position.set(-15, 20, -15);
+  scene.add(directionalLight2);
+
+  const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.3);
+  directionalLight3.position.set(0, 10, -20);
+  scene.add(directionalLight3);
+
+  // Create box
+  createBox().catch(err => {
+    console.error("Error creating box:", err);
+  });
+
+  // Dimensions group
+  dimensionsGroup = new THREE.Group();
+  scene.add(dimensionsGroup);
+
+  // Ground plane
+  const planeGeometry = new THREE.PlaneGeometry(100, 100);
+  const planeMaterial = new THREE.ShadowMaterial({ opacity: 0.2 });
+  const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.y = -0.01;
+  plane.receiveShadow = true;
+  scene.add(plane);
+
+  // Grid helper (subtle)
+  const gridHelper = new THREE.GridHelper(20, 20, 0xcccccc, 0xe0e0e0);
+  gridHelper.position.y = -0.005;
+  scene.add(gridHelper);
+
+  // Handle window resize
+  window.addEventListener("resize", onWindowResize);
+
+  // Hide loading overlay
+  setTimeout(() => {
+    document.getElementById("loadingOverlay").classList.add("hidden");
+  }, 500);
+
+  animate();
+}
+
+// Create the box model
+async function createBox() {
+  if (boxGroup) {
+    scene.remove(boxGroup);
+    boxGroup.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+  }
+
+  boxGroup = new THREE.Group();
+  const dims = boxDimensions[currentBoxType];
+
+  // Load texture
+  const texture = await loadTexture(currentBrand, currentBoxType);
+
+  // Configure texture wrapping to prevent gaps between faces
+  if (texture) {
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.repeat.set(1, 1);
+  }
+
+  // Materials and geometry: special handling for brands with cropped per-face textures
+  let flapMaterial;
+  let croppedTextureSet = null; // Store cropped texture set for reuse in flaps
+  const brandsWithCroppedTextures = ["FRUTALUXE", "FRUTANA JOY", "FRUTANA", "FRUTANOVA", "SINDIBAD"];
+  const hasCroppedTextures = (currentBoxType === "22XU" || currentBoxType === "208") && brandsWithCroppedTextures.includes(currentBrand);
+  
+  if (hasCroppedTextures) {
+    // Load appropriate texture set based on brand and box type
+    if (currentBoxType === "22XU") {
+      if (currentBrand === "FRUTALUXE") {
+        croppedTextureSet = await loadFrutaluxeCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANA JOY") {
+        croppedTextureSet = await loadFrutanaJoyCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANA") {
+        croppedTextureSet = await loadFrutanaCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANOVA") {
+        croppedTextureSet = await loadFrutanovaCroppedTextures22XU();
+      } else if (currentBrand === "SINDIBAD") {
+        croppedTextureSet = await loadSindibadCroppedTextures22XU();
+      }
+    } else if (currentBoxType === "208") {
+      // For 208 boxes, use the same 22XU textures (they can be reused)
+      if (currentBrand === "FRUTALUXE") {
+        croppedTextureSet = await loadFrutaluxeCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANA JOY") {
+        croppedTextureSet = await loadFrutanaJoyCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANA") {
+        croppedTextureSet = await loadFrutanaCroppedTextures22XU();
+      } else if (currentBrand === "FRUTANOVA") {
+        croppedTextureSet = await loadFrutanovaCroppedTextures22XU();
+      } else if (currentBrand === "SINDIBAD") {
+        croppedTextureSet = await loadSindibadCroppedTextures22XU();
+      }
+    }
+    
+    const geom = new THREE.BoxGeometry(dims.width, dims.height, dims.depth);
+    // Exterior faces mapped individually
+    const matRight = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.right, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const matLeft = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.left, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const matFront = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.front, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const matBack = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.back, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    // Make TOP FACE transparent so box is open from above
+    const neutralTop = new THREE.MeshStandardMaterial({ color: 0xd8c3a5, roughness: 0.9, metalness: 0.02, transparent: true, opacity: 0.0 });
+    // Use bottom texture from the set (using first bottom flap texture as fallback)
+    const bottomTexture = croppedTextureSet.faces.bottom || croppedTextureSet.flaps.bottom.long1;
+    const matBottom = new THREE.MeshStandardMaterial({ map: bottomTexture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    boxBody = new THREE.Mesh(geom, [matRight, matLeft, neutralTop, matBottom, matFront, matBack]);
+    // Flaps material will be assigned individually per flap below
+    flapMaterial = null;
+  } else {
+    // Default single-texture material path
+    const faceMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    // Transparent top face to open the box
+    const topMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.0 });
+    const bottomMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    flapMaterial = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    // Use regular BoxGeometry here so material indices map directly: [right, left, top, bottom, front, back]
+    const geom = new THREE.BoxGeometry(dims.width, dims.height, dims.depth);
+    boxBody = new THREE.Mesh(geom, [faceMaterial, faceMaterial, topMaterial, bottomMaterial, faceMaterial, faceMaterial]);
+  }
+  boxBody.position.y = dims.height / 2; // Center at half height
+  boxBody.castShadow = true;
+  boxBody.receiveShadow = true;
+  boxGroup.add(boxBody);
+
+  // Bottom flaps removed to avoid visible strip at base
+
+  // Top flaps - These close to form the lid or open to hang on the sides
+  // Flaps are positioned at the top edge of the box, starting in CLOSED position
+  const flapThickness = 0.02;
+  const flapWidth = dims.depth / 2; // Flaps extend to cover the top when closed
+  
+  // Front top flap - starts CLOSED (laying flat on top)
+  const frontFlapGeometry = new THREE.BoxGeometry(dims.width, flapThickness, flapWidth);
+  if (croppedTextureSet) {
+    // Assign cropped texture for short side flap 1
+    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.short1, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    frontFlap = new THREE.Mesh(frontFlapGeometry, mat);
+  } else {
+    frontFlap = new THREE.Mesh(frontFlapGeometry, flapMaterial);
+  }
+  frontFlap.position.set(0, dims.height, dims.depth / 4);
+  frontFlap.rotation.x = -Math.PI; // 180° closed
+  frontFlap.castShadow = true;
+  frontFlap.receiveShadow = true;
+  frontFlap.userData.hingePosition = new THREE.Vector3(0, dims.height, dims.depth / 2);
+  boxGroup.add(frontFlap);
+
+  // Back top flap - starts CLOSED (laying flat on top)
+  const backFlapGeometry = new THREE.BoxGeometry(dims.width, flapThickness, flapWidth);
+  if (croppedTextureSet) {
+    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.short2, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    backFlap = new THREE.Mesh(backFlapGeometry, mat);
+  } else {
+    backFlap = new THREE.Mesh(backFlapGeometry, flapMaterial);
+  }
+  backFlap.position.set(0, dims.height, -dims.depth / 4);
+  backFlap.rotation.x = Math.PI; // 180° closed
+  backFlap.castShadow = true;
+  backFlap.receiveShadow = true;
+  backFlap.userData.hingePosition = new THREE.Vector3(0, dims.height, -dims.depth / 2);
+  boxGroup.add(backFlap);
+
+  // Left top flap - starts CLOSED (laying flat on top)
+  const leftFlapGeometry = new THREE.BoxGeometry(flapWidth, flapThickness, dims.depth);
+  if (croppedTextureSet) {
+    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.long1, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    leftFlap = new THREE.Mesh(leftFlapGeometry, mat);
+  } else {
+    leftFlap = new THREE.Mesh(leftFlapGeometry, flapMaterial);
+  }
+  leftFlap.position.set(-dims.width / 4, dims.height, 0);
+  leftFlap.rotation.z = Math.PI; // 180° closed
+  leftFlap.castShadow = true;
+  leftFlap.receiveShadow = true;
+  leftFlap.userData.hingePosition = new THREE.Vector3(-dims.width / 2, dims.height, 0);
+  boxGroup.add(leftFlap);
+
+  // Right top flap - starts CLOSED (laying flat on top)
+  const rightFlapGeometry = new THREE.BoxGeometry(flapWidth, flapThickness, dims.depth);
+  if (croppedTextureSet) {
+    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.long2, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    rightFlap = new THREE.Mesh(rightFlapGeometry, mat);
+  } else {
+    rightFlap = new THREE.Mesh(rightFlapGeometry, flapMaterial);
+  }
+  rightFlap.position.set(dims.width / 4, dims.height, 0);
+  rightFlap.rotation.z = -Math.PI; // 180° closed
+  rightFlap.castShadow = true;
+  rightFlap.receiveShadow = true;
+  rightFlap.userData.hingePosition = new THREE.Vector3(dims.width / 2, dims.height, 0);
+  boxGroup.add(rightFlap);
+
+  // Create bananas inside the box
+  createBananas(dims);
+
+  scene.add(boxGroup);
+  updateDimensions();
+}
+
+// Create banana geometry inside the box
+function createBananas(dims) {
+  // Clear existing bananas
+  bananas.forEach(banana => {
+    boxGroup.remove(banana);
+    if (banana.geometry) banana.geometry.dispose();
+    if (banana.material) banana.material.dispose();
+  });
+  bananas = [];
+
+  // Banana material - bright yellow/green for unripe bananas
+  const bananaMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8BC34A, // Green color for unripe bananas
+    roughness: 0.6,
+    metalness: 0.1,
+  });
+
+  // Create curved banana shape using bent cylinder
+  const bananaCount = 8;
+  const bananaRadius = 0.08;
+  const bananaLength = 0.6;
+
+  for (let i = 0; i < bananaCount; i++) {
+    const banana = createBanana(bananaRadius, bananaLength, bananaMaterial);
+    
+    // Position bananas inside the box in a cluster
+    const row = Math.floor(i / 4);
+    const col = i % 4;
+    const x = (col - 1.5) * 0.4;
+    const z = (row - 0.5) * 0.5;
+    const y = dims.height * 0.3;
+    
+    banana.position.set(x, y, z);
+    banana.rotation.x = Math.random() * 0.5 - 0.25;
+    banana.rotation.y = Math.random() * Math.PI;
+    banana.rotation.z = Math.random() * 0.5 - 0.25;
+    
+    banana.castShadow = true;
+    banana.receiveShadow = true;
+    
+    boxGroup.add(banana);
+    bananas.push(banana);
+  }
+}
+
+// Geometry and texture loading are now handled in separate modules
+
+// Close flaps to form the lid
+function closeFlaps() {
+  if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
+
+  flapsOpen = false;
+  const dims = boxDimensions[currentBoxType];
+
+  // Front flap - rotate to lay flat on top
+  gsap.to(frontFlap.rotation, {
+    x: -Math.PI,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(frontFlap.position, {
+    z: dims.depth / 4,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Back flap - rotate to lay flat on top
+  gsap.to(backFlap.rotation, {
+    x: Math.PI,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(backFlap.position, {
+    z: -dims.depth / 4,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Left flap - rotate to lay flat on top
+  gsap.to(leftFlap.rotation, {
+    z: Math.PI,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(leftFlap.position, {
+    x: -dims.width / 4,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Right flap - rotate to lay flat on top
+  gsap.to(rightFlap.rotation, {
+    z: -Math.PI,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(rightFlap.position, {
+    x: dims.width / 4,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+}
+
+// Open flaps to hang on the sides
+function openFlaps() {
+  if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
+
+  flapsOpen = true;
+  const dims = boxDimensions[currentBoxType];
+  const flapWidth = dims.depth / 2;
+
+  // Front flap - rotate to hang down at front
+  gsap.to(frontFlap.rotation, {
+    x: 0,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(frontFlap.position, {
+    z: dims.depth / 2 + flapWidth / 2,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Back flap - rotate to hang down at back
+  gsap.to(backFlap.rotation, {
+    x: 0,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(backFlap.position, {
+    z: -dims.depth / 2 - flapWidth / 2,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Left flap - rotate to hang down on left
+  gsap.to(leftFlap.rotation, {
+    z: 0,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(leftFlap.position, {
+    x: -dims.width / 2 - flapWidth / 2,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+
+  // Right flap - rotate to hang down on right
+  gsap.to(rightFlap.rotation, {
+    z: 0,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+  gsap.to(rightFlap.position, {
+    x: dims.width / 2 + flapWidth / 2,
+    duration: 0.8,
+    ease: "power2.inOut",
+  });
+}
+
+// Update dimensions display
+function updateDimensions() {
+  if (dimensionsGroup) {
+    dimensionsGroup.clear();
+  }
+
+  if (!dimensionsVisible) return;
+
+  const dims = boxDimensions[currentBoxType];
+  
+  // Create dimension lines with arrows
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 });
+  const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff3333 });
+
+  // Width dimension
+  const widthY = dims.height + 1.5;
+  const widthPoints = [
+    new THREE.Vector3(-dims.width / 2, widthY, dims.depth / 2 + 0.5),
+    new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5)
+  ];
+  const widthGeometry = new THREE.BufferGeometry().setFromPoints(widthPoints);
+  const widthLine = new THREE.Line(widthGeometry, lineMaterial);
+  dimensionsGroup.add(widthLine);
+
+  // Width arrows
+  addArrow(new THREE.Vector3(-dims.width / 2, widthY, dims.depth / 2 + 0.5), new THREE.Vector3(1, 0, 0), arrowMaterial);
+  addArrow(new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5), new THREE.Vector3(-1, 0, 0), arrowMaterial);
+
+  // Height dimension
+  const heightX = dims.width / 2 + 1;
+  const heightPoints = [
+    new THREE.Vector3(heightX, 0, dims.depth / 2 + 0.5),
+    new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5)
+  ];
+  const heightGeometry = new THREE.BufferGeometry().setFromPoints(heightPoints);
+  const heightLine = new THREE.Line(heightGeometry, lineMaterial);
+  dimensionsGroup.add(heightLine);
+
+  // Height arrows
+  addArrow(new THREE.Vector3(heightX, 0, dims.depth / 2 + 0.5), new THREE.Vector3(0, 1, 0), arrowMaterial);
+  addArrow(new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5), new THREE.Vector3(0, -1, 0), arrowMaterial);
+
+  // Depth dimension
+  const depthX = dims.width / 2 + 1;
+  const depthY = dims.height + 0.5;
+  const depthPoints = [
+    new THREE.Vector3(depthX, depthY, -dims.depth / 2),
+    new THREE.Vector3(depthX, depthY, dims.depth / 2)
+  ];
+  const depthGeometry = new THREE.BufferGeometry().setFromPoints(depthPoints);
+  const depthLine = new THREE.Line(depthGeometry, lineMaterial);
+  dimensionsGroup.add(depthLine);
+
+  // Depth arrows
+  addArrow(new THREE.Vector3(depthX, depthY, -dims.depth / 2), new THREE.Vector3(0, 0, 1), arrowMaterial);
+  addArrow(new THREE.Vector3(depthX, depthY, dims.depth / 2), new THREE.Vector3(0, 0, -1), arrowMaterial);
+
+  function addArrow(position, direction, material) {
+    const arrowGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+    const arrow = new THREE.Mesh(arrowGeometry, material);
+    arrow.position.copy(position);
+    
+    // Orient arrow in direction
+    const axis = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromUnitVectors(axis, direction);
+    arrow.quaternion.copy(quaternion);
+    
+    dimensionsGroup.add(arrow);
+  }
+}
+
+// Flap animation functions are defined earlier in the file
+
+// Toggle dimensions
+function toggleDimensions() {
+  dimensionsVisible = !dimensionsVisible;
+  updateDimensions();
+
+  const btn = document.getElementById("toggleDimensionsBtn");
+  if (dimensionsVisible) {
+    btn.classList.add("active");
+  } else {
+    btn.classList.remove("active");
+  }
+}
+
+// Handle window resize
+function onWindowResize() {
+  const container = document.getElementById("canvas-container");
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// Event Listeners
+document.addEventListener("DOMContentLoaded", () => {
+  init();
+
+  // Box type selection
+  document.getElementById("boxType").addEventListener("change", (e) => {
+    currentBoxType = e.target.value;
+    createBox().catch(err => {
+      console.error("Error creating box:", err);
+    });
+  });
+
+  // Brand selection
+  document.querySelectorAll(".brand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".brand-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentBrand = btn.dataset.brand;
+      createBox().catch(err => {
+        console.error("Error creating box:", err);
+      });
+    });
+  });
+
+  // Control buttons
+  document.getElementById("openFlapsBtn").addEventListener("click", () => {
+    if (flapsOpen) {
+      closeFlaps();
+    } else {
+      openFlaps();
+    }
+  });
+  
+  document.getElementById("toggleDimensionsBtn").addEventListener("click", toggleDimensions);
+
+  // Form submission
+  document.getElementById("customBoxForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const formData = {
+      fullName: document.getElementById("fullName").value,
+      email: document.getElementById("email").value,
+      company: document.getElementById("company").value,
+      phone: document.getElementById("phone").value,
+      boxType: document.getElementById("boxTypeForm").value,
+      brand: document.getElementById("brandForm").value,
+      quantity: document.getElementById("quantity").value,
+      requirements: document.getElementById("requirements").value,
+      newsletter: document.getElementById("newsletter").checked,
+    };
+
+    console.log("Form submitted:", formData);
+
+    document.getElementById("customBoxForm").style.display = "none";
+    document.getElementById("formSuccess").style.display = "flex";
+
+    setTimeout(() => {
+      document.getElementById("customBoxForm").reset();
+      document.getElementById("customBoxForm").style.display = "block";
+      document.getElementById("formSuccess").style.display = "none";
+    }, 5000);
+  });
+
+  // Sync form selects with configurator
+  document.getElementById("boxType").addEventListener("change", (e) => {
+    document.getElementById("boxTypeForm").value = e.target.value;
+  });
+
+  document.querySelectorAll(".brand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.getElementById("brandForm").value = btn.dataset.brand;
+    });
+  });
+});
+
