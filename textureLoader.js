@@ -130,8 +130,10 @@ export async function loadFrutaluxeCroppedTextures22XU() {
     left: `long side 2.png`,
     front: `short side 1.png`,
     back: `short side 2.png`,
-    // Optional: interiors are available but not applied in this pass
-    // top/bottom are not provided; will fallback to neutral
+    
+    // Interior sides (cardboard color)
+    interior_long: `long side interior.png`,
+    interior_short: `short side interior.png`,
 
     // Top flap faces
     flap_long1: `long 1 flap.png`,
@@ -158,6 +160,10 @@ export async function loadFrutaluxeCroppedTextures22XU() {
           tex.wrapS = THREE.ClampToEdgeWrapping;
           tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.colorSpace = THREE.SRGBColorSpace;
+          // Enable alpha channel for interior textures (needed for holes transparency)
+          if (key.includes('interior')) {
+            tex.format = THREE.RGBAFormat;
+          }
           resolve([key, tex]);
         },
         undefined,
@@ -179,6 +185,10 @@ export async function loadFrutaluxeCroppedTextures22XU() {
       front: map.front,
       back: map.back,
       bottom: map.flap_bottom_long1, // Use bottom flap texture for bottom face
+    },
+    interiors: {
+      long: map.interior_long,   // For long sides (right and left)
+      short: map.interior_short,  // For short sides (front and back)
     },
     flaps: {
       top: {

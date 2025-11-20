@@ -1,24 +1,33 @@
 // Import Three.js modules
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { loadTexture, loadFrutaluxeCroppedTextures22XU, loadFrutanaJoyCroppedTextures22XU, loadFrutanaCroppedTextures22XU, loadFrutanovaCroppedTextures22XU, loadSindibadCroppedTextures22XU } from './textureLoader.js';
-import { createBoxWithCustomUVs, createBanana } from './boxGeometry.js';
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import {
+  loadTexture,
+  loadFrutaluxeCroppedTextures22XU,
+  loadFrutanaJoyCroppedTextures22XU,
+  loadFrutanaCroppedTextures22XU,
+  loadFrutanovaCroppedTextures22XU,
+  loadSindibadCroppedTextures22XU,
+} from "./textureLoader.js";
+import { createBoxWithCustomUVs, createBanana } from "./boxGeometry.js";
 
 // Three.js Scene Setup
 let scene, camera, renderer, controls;
 let boxGroup, leftFlap, rightFlap, frontFlap, backFlap, boxBody;
+let lidGroup, lidRight, lidLeft, lidFront, lidBack; // Lid structure for FRUTALUXE
 let bananas = []; // Array to hold banana objects
 let dimensionsVisible = false;
 let dimensionsGroup;
 let currentBrand = "FRUTANA";
 let currentBoxType = "22XU";
 let flapsOpen = false;
+let lidOpen = false; // State for lid lift
 
 // Box dimensions based on type (in cm, scaled for 3D)
 // Dimensions extracted from engineering drawings in PDFs (converted from mm to cm)
 const boxDimensions = {
-  "22XU": { width: 5.22, height: 2.36, depth: 3.87, lidHeight: 0.5 },  // 522mm x 236mm x 387mm
-  208: { width: 5.15, height: 2.13, depth: 3.42, lidHeight: 0.5 },     // 515mm x 213mm x 342mm
+  "22XU": { width: 5.22, height: 2.36, depth: 3.87, lidHeight: 0.5 }, // 522mm x 236mm x 387mm
+  208: { width: 5.15, height: 2.13, depth: 3.42, lidHeight: 0.5 }, // 515mm x 213mm x 342mm
 };
 
 // Initialize the 3D scene
@@ -81,7 +90,7 @@ function init() {
   scene.add(directionalLight3);
 
   // Create box
-  createBox().catch(err => {
+  createBox().catch((err) => {
     console.error("Error creating box:", err);
   });
 
@@ -146,9 +155,17 @@ async function createBox() {
   // Materials and geometry: special handling for brands with cropped per-face textures
   let flapMaterial;
   let croppedTextureSet = null; // Store cropped texture set for reuse in flaps
-  const brandsWithCroppedTextures = ["FRUTALUXE", "FRUTANA JOY", "FRUTANA", "FRUTANOVA", "SINDIBAD"];
-  const hasCroppedTextures = (currentBoxType === "22XU" || currentBoxType === "208") && brandsWithCroppedTextures.includes(currentBrand);
-  
+  const brandsWithCroppedTextures = [
+    "FRUTALUXE",
+    "FRUTANA JOY",
+    "FRUTANA",
+    "FRUTANOVA",
+    "SINDIBAD",
+  ];
+  const hasCroppedTextures =
+    (currentBoxType === "22XU" || currentBoxType === "208") &&
+    brandsWithCroppedTextures.includes(currentBrand);
+
   if (hasCroppedTextures) {
     // Load appropriate texture set based on brand and box type
     if (currentBoxType === "22XU") {
@@ -177,27 +194,80 @@ async function createBox() {
         croppedTextureSet = await loadSindibadCroppedTextures22XU();
       }
     }
-    
+
     const geom = new THREE.BoxGeometry(dims.width, dims.height, dims.depth);
     // Exterior faces mapped individually
-    const matRight = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.right, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    const matLeft = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.left, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    const matFront = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.front, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    const matBack = new THREE.MeshStandardMaterial({ map: croppedTextureSet.faces.back, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const matRight = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.right,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    const matLeft = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.left,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    const matFront = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.front,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    const matBack = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.back,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
     // Make TOP FACE transparent so box is open from above
-    const neutralTop = new THREE.MeshStandardMaterial({ color: 0xd8c3a5, roughness: 0.9, metalness: 0.02, transparent: true, opacity: 0.0 });
+    const neutralTop = new THREE.MeshStandardMaterial({
+      color: 0xd8c3a5,
+      roughness: 0.9,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.0,
+    });
     // Use bottom texture from the set (using first bottom flap texture as fallback)
-    const bottomTexture = croppedTextureSet.faces.bottom || croppedTextureSet.flaps.bottom.long1;
-    const matBottom = new THREE.MeshStandardMaterial({ map: bottomTexture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    boxBody = new THREE.Mesh(geom, [matRight, matLeft, neutralTop, matBottom, matFront, matBack]);
+    const bottomTexture =
+      croppedTextureSet.faces.bottom || croppedTextureSet.flaps.bottom.long1;
+    const matBottom = new THREE.MeshStandardMaterial({
+      map: bottomTexture,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    boxBody = new THREE.Mesh(geom, [
+      matRight,
+      matLeft,
+      neutralTop,
+      matBottom,
+      matFront,
+      matBack,
+    ]);
     // Flaps material will be assigned individually per flap below
     flapMaterial = null;
   } else {
     // Default single-texture material path
-    const faceMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const faceMaterial = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
     // Transparent top face to open the box
-    const topMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.0 });
-    const bottomMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
+    const topMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.0,
+    });
+    const bottomMaterial = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
     flapMaterial = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 0.75,
@@ -206,12 +276,228 @@ async function createBox() {
     });
     // Use regular BoxGeometry here so material indices map directly: [right, left, top, bottom, front, back]
     const geom = new THREE.BoxGeometry(dims.width, dims.height, dims.depth);
-    boxBody = new THREE.Mesh(geom, [faceMaterial, faceMaterial, topMaterial, bottomMaterial, faceMaterial, faceMaterial]);
+    boxBody = new THREE.Mesh(geom, [
+      faceMaterial,
+      faceMaterial,
+      topMaterial,
+      bottomMaterial,
+      faceMaterial,
+      faceMaterial,
+    ]);
   }
   boxBody.position.y = dims.height / 2; // Center at half height
   boxBody.castShadow = true;
   boxBody.receiveShadow = true;
   boxGroup.add(boxBody);
+
+  // For FRUTALUXE, create special lid structure with sides extending to bottom
+  const isFrutaluxe =
+    currentBrand === "FRUTALUXE" &&
+    hasCroppedTextures &&
+    croppedTextureSet?.interiors;
+  if (isFrutaluxe) {
+    // Create lid group
+    lidGroup = new THREE.Group();
+    const lidThickness = 0.02;
+
+    // Create lid sides as boxes with thickness so inside and outside can have different materials
+    // BoxGeometry material indices: [right, left, top, bottom, front, back]
+    // Right lid side (long side 1) - positioned at +X
+    const lidRightGeom = new THREE.BoxGeometry(
+      lidThickness,
+      dims.height,
+      dims.depth
+    );
+    const lidRightMatExterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.right,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.FrontSide,
+    });
+    const lidRightMatInterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.interiors.long,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.BackSide,
+    });
+    // Material array: [right, left, top, bottom, front, back]
+    // For right side: right face (index 0) = exterior, left face (index 1) = interior
+    lidRight = new THREE.Mesh(lidRightGeom, [
+      lidRightMatExterior, // right face (outside)
+      lidRightMatInterior, // left face (inside)
+      lidRightMatExterior, // top
+      lidRightMatExterior, // bottom
+      lidRightMatExterior, // front
+      lidRightMatExterior, // back
+    ]);
+    lidRight.position.set(dims.width / 2, dims.height / 2, 0);
+    lidRight.userData.exteriorMaterial = lidRightMatExterior;
+    lidRight.userData.interiorMaterial = lidRightMatInterior;
+    lidGroup.add(lidRight);
+
+    // Left lid side (long side 2) - positioned at -X
+    const lidLeftGeom = new THREE.BoxGeometry(
+      lidThickness,
+      dims.height,
+      dims.depth
+    );
+    const lidLeftMatExterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.left,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.FrontSide,
+    });
+    const lidLeftMatInterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.interiors.long,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.BackSide,
+    });
+    // For left side: left face (index 1) = exterior, right face (index 0) = interior
+    lidLeft = new THREE.Mesh(lidLeftGeom, [
+      lidLeftMatInterior, // right face (inside)
+      lidLeftMatExterior, // left face (outside)
+      lidLeftMatExterior, // top
+      lidLeftMatExterior, // bottom
+      lidLeftMatExterior, // front
+      lidLeftMatExterior, // back
+    ]);
+    lidLeft.position.set(-dims.width / 2, dims.height / 2, 0);
+    lidLeft.userData.exteriorMaterial = lidLeftMatExterior;
+    lidLeft.userData.interiorMaterial = lidLeftMatInterior;
+    lidGroup.add(lidLeft);
+
+    // Front lid side (short side 1) - positioned at +Z
+    const lidFrontGeom = new THREE.BoxGeometry(
+      dims.width,
+      dims.height,
+      lidThickness
+    );
+    const lidFrontMatExterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.front,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.FrontSide,
+    });
+    const lidFrontMatInterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.interiors.short,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.BackSide,
+    });
+    // For front side: front face (index 4) = exterior, back face (index 5) = interior
+    lidFront = new THREE.Mesh(lidFrontGeom, [
+      lidFrontMatExterior, // right
+      lidFrontMatExterior, // left
+      lidFrontMatExterior, // top
+      lidFrontMatExterior, // bottom
+      lidFrontMatExterior, // front face (outside)
+      lidFrontMatInterior, // back face (inside)
+    ]);
+    lidFront.position.set(0, dims.height / 2, dims.depth / 2);
+    lidFront.userData.exteriorMaterial = lidFrontMatExterior;
+    lidFront.userData.interiorMaterial = lidFrontMatInterior;
+    lidGroup.add(lidFront);
+
+    // Back lid side (short side 2) - positioned at -Z
+    const lidBackGeom = new THREE.BoxGeometry(
+      dims.width,
+      dims.height,
+      lidThickness
+    );
+    const lidBackMatExterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.faces.back,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.FrontSide,
+    });
+    const lidBackMatInterior = new THREE.MeshStandardMaterial({
+      map: croppedTextureSet.interiors.short,
+      roughness: 0.75,
+      metalness: 0.05,
+      side: THREE.BackSide,
+    });
+    // For back side: back face (index 5) = exterior, front face (index 4) = interior
+    lidBack = new THREE.Mesh(lidBackGeom, [
+      lidBackMatExterior, // right
+      lidBackMatExterior, // left
+      lidBackMatExterior, // top
+      lidBackMatExterior, // bottom
+      lidBackMatInterior, // front face (inside)
+      lidBackMatExterior, // back face (outside)
+    ]);
+    lidBack.position.set(0, dims.height / 2, -dims.depth / 2);
+    lidBack.userData.exteriorMaterial = lidBackMatExterior;
+    lidBack.userData.interiorMaterial = lidBackMatInterior;
+    lidGroup.add(lidBack);
+
+    // Box body should show interior textures on its sides (it's the base box)
+    // When lid is closed, we don't see box body sides anyway
+    // When lid is open, we see box body interior sides with textures
+    if (boxBody.material && Array.isArray(boxBody.material)) {
+      // Use interior textures for box body sides
+      // Long sides use long side interior texture
+      const boxRightMatInterior = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.interiors.long,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        transparent: false, // Keep opaque - only holes will be transparent via alphaTest
+        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        depthWrite: true,
+      });
+      const boxLeftMatInterior = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.interiors.long,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        transparent: false, // Keep opaque - only holes will be transparent via alphaTest
+        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        depthWrite: true,
+      });
+      // Short sides use short side interior texture
+      const boxFrontMatInterior = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.interiors.short,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        transparent: false, // Keep opaque - only holes will be transparent via alphaTest
+        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        depthWrite: true,
+      });
+      const boxBackMatInterior = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.interiors.short,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        transparent: false, // Keep opaque - only holes will be transparent via alphaTest
+        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        depthWrite: true,
+      });
+
+      // Store materials for later updates
+      boxBody.userData.interiorMaterials = [
+        boxRightMatInterior,
+        boxLeftMatInterior,
+        boxBody.material[2], // top (transparent)
+        boxBody.material[3], // bottom (keep exterior)
+        boxFrontMatInterior,
+        boxBackMatInterior,
+      ];
+
+      // Box body always shows interior textures on sides when visible (when lid is open)
+      boxBody.material = boxBody.userData.interiorMaterials;
+    }
+
+    lidGroup.position.y = 0;
+    boxGroup.add(lidGroup);
+  } else {
+    lidGroup = null;
+    lidRight = null;
+    lidLeft = null;
+    lidFront = null;
+    lidBack = null;
+  }
 
   // Bottom flaps removed to avoid visible strip at base
 
@@ -219,13 +505,49 @@ async function createBox() {
   // Flaps are positioned at the top edge of the box, starting in CLOSED position
   const flapThickness = 0.02;
   const flapWidth = dims.depth / 2; // Flaps extend to cover the top when closed
-  
+
   // Front top flap - starts CLOSED (laying flat on top)
-  const frontFlapGeometry = new THREE.BoxGeometry(dims.width, flapThickness, flapWidth);
+  const frontFlapGeometry = new THREE.BoxGeometry(
+    dims.width,
+    flapThickness,
+    flapWidth
+  );
   if (croppedTextureSet) {
-    // Assign cropped texture for short side flap 1
-    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.short1, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    frontFlap = new THREE.Mesh(frontFlapGeometry, mat);
+    if (isFrutaluxe) {
+      // For FRUTALUXE, create materials with exterior on outside and cardboard on inside
+      const cardboardColor = 0xd8c3a5; // Cardboard brown color
+      const exteriorMat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.short1,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.FrontSide,
+      });
+      const interiorMat = new THREE.MeshStandardMaterial({
+        color: cardboardColor,
+        roughness: 0.9,
+        metalness: 0.02,
+        side: THREE.BackSide,
+      });
+      // Use an array of materials for front and back
+      frontFlap = new THREE.Mesh(frontFlapGeometry, [
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        interiorMat,
+      ]);
+      frontFlap.userData.exteriorMaterial = exteriorMat;
+      frontFlap.userData.interiorMaterial = interiorMat;
+    } else {
+      const mat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.short1,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      });
+      frontFlap = new THREE.Mesh(frontFlapGeometry, mat);
+    }
   } else {
     frontFlap = new THREE.Mesh(frontFlapGeometry, flapMaterial);
   }
@@ -233,14 +555,57 @@ async function createBox() {
   frontFlap.rotation.x = -Math.PI; // 180° closed
   frontFlap.castShadow = true;
   frontFlap.receiveShadow = true;
-  frontFlap.userData.hingePosition = new THREE.Vector3(0, dims.height, dims.depth / 2);
-  boxGroup.add(frontFlap);
+  frontFlap.userData.hingePosition = new THREE.Vector3(
+    0,
+    dims.height,
+    dims.depth / 2
+  );
+  if (isFrutaluxe && lidGroup) {
+    lidGroup.add(frontFlap);
+  } else {
+    boxGroup.add(frontFlap);
+  }
 
   // Back top flap - starts CLOSED (laying flat on top)
-  const backFlapGeometry = new THREE.BoxGeometry(dims.width, flapThickness, flapWidth);
+  const backFlapGeometry = new THREE.BoxGeometry(
+    dims.width,
+    flapThickness,
+    flapWidth
+  );
   if (croppedTextureSet) {
-    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.short2, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    backFlap = new THREE.Mesh(backFlapGeometry, mat);
+    if (isFrutaluxe) {
+      const cardboardColor = 0xd8c3a5;
+      const exteriorMat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.short2,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.FrontSide,
+      });
+      const interiorMat = new THREE.MeshStandardMaterial({
+        color: cardboardColor,
+        roughness: 0.9,
+        metalness: 0.02,
+        side: THREE.BackSide,
+      });
+      backFlap = new THREE.Mesh(backFlapGeometry, [
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        interiorMat,
+      ]);
+      backFlap.userData.exteriorMaterial = exteriorMat;
+      backFlap.userData.interiorMaterial = interiorMat;
+    } else {
+      const mat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.short2,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      });
+      backFlap = new THREE.Mesh(backFlapGeometry, mat);
+    }
   } else {
     backFlap = new THREE.Mesh(backFlapGeometry, flapMaterial);
   }
@@ -248,14 +613,57 @@ async function createBox() {
   backFlap.rotation.x = Math.PI; // 180° closed
   backFlap.castShadow = true;
   backFlap.receiveShadow = true;
-  backFlap.userData.hingePosition = new THREE.Vector3(0, dims.height, -dims.depth / 2);
-  boxGroup.add(backFlap);
+  backFlap.userData.hingePosition = new THREE.Vector3(
+    0,
+    dims.height,
+    -dims.depth / 2
+  );
+  if (isFrutaluxe && lidGroup) {
+    lidGroup.add(backFlap);
+  } else {
+    boxGroup.add(backFlap);
+  }
 
   // Left top flap - starts CLOSED (laying flat on top)
-  const leftFlapGeometry = new THREE.BoxGeometry(flapWidth, flapThickness, dims.depth);
+  const leftFlapGeometry = new THREE.BoxGeometry(
+    flapWidth,
+    flapThickness,
+    dims.depth
+  );
   if (croppedTextureSet) {
-    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.long1, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    leftFlap = new THREE.Mesh(leftFlapGeometry, mat);
+    if (isFrutaluxe) {
+      const cardboardColor = 0xd8c3a5;
+      const exteriorMat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.long1,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.FrontSide,
+      });
+      const interiorMat = new THREE.MeshStandardMaterial({
+        color: cardboardColor,
+        roughness: 0.9,
+        metalness: 0.02,
+        side: THREE.BackSide,
+      });
+      leftFlap = new THREE.Mesh(leftFlapGeometry, [
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        interiorMat,
+      ]);
+      leftFlap.userData.exteriorMaterial = exteriorMat;
+      leftFlap.userData.interiorMaterial = interiorMat;
+    } else {
+      const mat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.long1,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      });
+      leftFlap = new THREE.Mesh(leftFlapGeometry, mat);
+    }
   } else {
     leftFlap = new THREE.Mesh(leftFlapGeometry, flapMaterial);
   }
@@ -263,14 +671,57 @@ async function createBox() {
   leftFlap.rotation.z = Math.PI; // 180° closed
   leftFlap.castShadow = true;
   leftFlap.receiveShadow = true;
-  leftFlap.userData.hingePosition = new THREE.Vector3(-dims.width / 2, dims.height, 0);
-  boxGroup.add(leftFlap);
+  leftFlap.userData.hingePosition = new THREE.Vector3(
+    -dims.width / 2,
+    dims.height,
+    0
+  );
+  if (isFrutaluxe && lidGroup) {
+    lidGroup.add(leftFlap);
+  } else {
+    boxGroup.add(leftFlap);
+  }
 
   // Right top flap - starts CLOSED (laying flat on top)
-  const rightFlapGeometry = new THREE.BoxGeometry(flapWidth, flapThickness, dims.depth);
+  const rightFlapGeometry = new THREE.BoxGeometry(
+    flapWidth,
+    flapThickness,
+    dims.depth
+  );
   if (croppedTextureSet) {
-    const mat = new THREE.MeshStandardMaterial({ map: croppedTextureSet.flaps.top.long2, roughness: 0.75, metalness: 0.05, side: THREE.DoubleSide });
-    rightFlap = new THREE.Mesh(rightFlapGeometry, mat);
+    if (isFrutaluxe) {
+      const cardboardColor = 0xd8c3a5;
+      const exteriorMat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.long2,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.FrontSide,
+      });
+      const interiorMat = new THREE.MeshStandardMaterial({
+        color: cardboardColor,
+        roughness: 0.9,
+        metalness: 0.02,
+        side: THREE.BackSide,
+      });
+      rightFlap = new THREE.Mesh(rightFlapGeometry, [
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        exteriorMat,
+        interiorMat,
+      ]);
+      rightFlap.userData.exteriorMaterial = exteriorMat;
+      rightFlap.userData.interiorMaterial = interiorMat;
+    } else {
+      const mat = new THREE.MeshStandardMaterial({
+        map: croppedTextureSet.flaps.top.long2,
+        roughness: 0.75,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+      });
+      rightFlap = new THREE.Mesh(rightFlapGeometry, mat);
+    }
   } else {
     rightFlap = new THREE.Mesh(rightFlapGeometry, flapMaterial);
   }
@@ -278,20 +729,46 @@ async function createBox() {
   rightFlap.rotation.z = -Math.PI; // 180° closed
   rightFlap.castShadow = true;
   rightFlap.receiveShadow = true;
-  rightFlap.userData.hingePosition = new THREE.Vector3(dims.width / 2, dims.height, 0);
-  boxGroup.add(rightFlap);
+  rightFlap.userData.hingePosition = new THREE.Vector3(
+    dims.width / 2,
+    dims.height,
+    0
+  );
+  if (isFrutaluxe && lidGroup) {
+    lidGroup.add(rightFlap);
+  } else {
+    boxGroup.add(rightFlap);
+  }
 
   // Create bananas inside the box
   createBananas(dims);
 
   scene.add(boxGroup);
   updateDimensions();
+
+  // Update lid button visibility
+  const toggleLidBtn = document.getElementById("toggleLidBtn");
+  if (toggleLidBtn) {
+    if (currentBrand === "FRUTALUXE") {
+      toggleLidBtn.style.display = "flex";
+    } else {
+      toggleLidBtn.style.display = "none";
+    }
+  }
+
+  // Reset lid state when box is recreated
+  lidOpen = false;
+  if (lidGroup) {
+    lidGroup.position.y = 0;
+  }
+  // Reset transparency state
+  updateLidTextures();
 }
 
 // Create banana geometry inside the box
 function createBananas(dims) {
   // Clear existing bananas
-  bananas.forEach(banana => {
+  bananas.forEach((banana) => {
     boxGroup.remove(banana);
     if (banana.geometry) banana.geometry.dispose();
     if (banana.material) banana.material.dispose();
@@ -300,7 +777,7 @@ function createBananas(dims) {
 
   // Banana material - bright yellow/green for unripe bananas
   const bananaMaterial = new THREE.MeshStandardMaterial({
-    color: 0x8BC34A, // Green color for unripe bananas
+    color: 0x8bc34a, // Green color for unripe bananas
     roughness: 0.6,
     metalness: 0.1,
   });
@@ -312,22 +789,22 @@ function createBananas(dims) {
 
   for (let i = 0; i < bananaCount; i++) {
     const banana = createBanana(bananaRadius, bananaLength, bananaMaterial);
-    
+
     // Position bananas inside the box in a cluster
     const row = Math.floor(i / 4);
     const col = i % 4;
     const x = (col - 1.5) * 0.4;
     const z = (row - 0.5) * 0.5;
     const y = dims.height * 0.3;
-    
+
     banana.position.set(x, y, z);
     banana.rotation.x = Math.random() * 0.5 - 0.25;
     banana.rotation.y = Math.random() * Math.PI;
     banana.rotation.z = Math.random() * 0.5 - 0.25;
-    
+
     banana.castShadow = true;
     banana.receiveShadow = true;
-    
+
     boxGroup.add(banana);
     bananas.push(banana);
   }
@@ -448,6 +925,70 @@ function openFlaps() {
   });
 }
 
+// Update textures based on lid state (for FRUTALUXE)
+function updateLidTextures() {
+  if (currentBrand !== "FRUTALUXE" || !lidGroup || !boxBody) return;
+
+  // Enable/disable alphaTest on box body materials based on lid state
+  // alphaTest makes only the holes transparent (where alpha < threshold)
+  // The rest of the side remains opaque
+  if (
+    boxBody.userData.interiorMaterials &&
+    Array.isArray(boxBody.userData.interiorMaterials)
+  ) {
+    boxBody.userData.interiorMaterials.forEach((mat, index) => {
+      // Skip top and bottom faces (indices 2 and 3)
+      if (index !== 2 && index !== 3 && mat && mat.isMeshStandardMaterial) {
+        // Enable alphaTest when lid is open to make holes transparent
+        // alphaTest: 0 means disabled (no transparency)
+        // alphaTest: 0.1 means pixels with alpha < 0.1 are discarded (transparent)
+        mat.alphaTest = lidOpen ? 0.1 : 0;
+        mat.needsUpdate = true;
+      }
+    });
+  }
+}
+
+// Toggle lid lift (for FRUTALUXE)
+function toggleLid() {
+  if (currentBrand !== "FRUTALUXE" || !lidGroup) return;
+
+  lidOpen = !lidOpen;
+  const dims = boxDimensions[currentBoxType];
+  const liftHeight = dims.height + 0.5; // Lift lid above the box
+
+  if (lidOpen) {
+    // Lift the lid
+    gsap.to(lidGroup.position, {
+      y: liftHeight,
+      duration: 1.0,
+      ease: "power2.inOut",
+      onUpdate: () => {
+        updateLidTextures();
+      },
+      onComplete: () => {
+        updateLidTextures();
+      },
+    });
+  } else {
+    // Lower the lid
+    gsap.to(lidGroup.position, {
+      y: 0,
+      duration: 1.0,
+      ease: "power2.inOut",
+      onUpdate: () => {
+        updateLidTextures();
+      },
+      onComplete: () => {
+        updateLidTextures();
+      },
+    });
+  }
+
+  // Update textures immediately
+  updateLidTextures();
+}
+
 // Update dimensions display
 function updateDimensions() {
   if (dimensionsGroup) {
@@ -457,65 +998,92 @@ function updateDimensions() {
   if (!dimensionsVisible) return;
 
   const dims = boxDimensions[currentBoxType];
-  
+
   // Create dimension lines with arrows
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 });
+  const lineMaterial = new THREE.LineBasicMaterial({
+    color: 0xff3333,
+    linewidth: 2,
+  });
   const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xff3333 });
 
   // Width dimension
   const widthY = dims.height + 1.5;
   const widthPoints = [
     new THREE.Vector3(-dims.width / 2, widthY, dims.depth / 2 + 0.5),
-    new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5)
+    new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5),
   ];
   const widthGeometry = new THREE.BufferGeometry().setFromPoints(widthPoints);
   const widthLine = new THREE.Line(widthGeometry, lineMaterial);
   dimensionsGroup.add(widthLine);
 
   // Width arrows
-  addArrow(new THREE.Vector3(-dims.width / 2, widthY, dims.depth / 2 + 0.5), new THREE.Vector3(1, 0, 0), arrowMaterial);
-  addArrow(new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5), new THREE.Vector3(-1, 0, 0), arrowMaterial);
+  addArrow(
+    new THREE.Vector3(-dims.width / 2, widthY, dims.depth / 2 + 0.5),
+    new THREE.Vector3(1, 0, 0),
+    arrowMaterial
+  );
+  addArrow(
+    new THREE.Vector3(dims.width / 2, widthY, dims.depth / 2 + 0.5),
+    new THREE.Vector3(-1, 0, 0),
+    arrowMaterial
+  );
 
   // Height dimension
   const heightX = dims.width / 2 + 1;
   const heightPoints = [
     new THREE.Vector3(heightX, 0, dims.depth / 2 + 0.5),
-    new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5)
+    new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5),
   ];
   const heightGeometry = new THREE.BufferGeometry().setFromPoints(heightPoints);
   const heightLine = new THREE.Line(heightGeometry, lineMaterial);
   dimensionsGroup.add(heightLine);
 
   // Height arrows
-  addArrow(new THREE.Vector3(heightX, 0, dims.depth / 2 + 0.5), new THREE.Vector3(0, 1, 0), arrowMaterial);
-  addArrow(new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5), new THREE.Vector3(0, -1, 0), arrowMaterial);
+  addArrow(
+    new THREE.Vector3(heightX, 0, dims.depth / 2 + 0.5),
+    new THREE.Vector3(0, 1, 0),
+    arrowMaterial
+  );
+  addArrow(
+    new THREE.Vector3(heightX, dims.height, dims.depth / 2 + 0.5),
+    new THREE.Vector3(0, -1, 0),
+    arrowMaterial
+  );
 
   // Depth dimension
   const depthX = dims.width / 2 + 1;
   const depthY = dims.height + 0.5;
   const depthPoints = [
     new THREE.Vector3(depthX, depthY, -dims.depth / 2),
-    new THREE.Vector3(depthX, depthY, dims.depth / 2)
+    new THREE.Vector3(depthX, depthY, dims.depth / 2),
   ];
   const depthGeometry = new THREE.BufferGeometry().setFromPoints(depthPoints);
   const depthLine = new THREE.Line(depthGeometry, lineMaterial);
   dimensionsGroup.add(depthLine);
 
   // Depth arrows
-  addArrow(new THREE.Vector3(depthX, depthY, -dims.depth / 2), new THREE.Vector3(0, 0, 1), arrowMaterial);
-  addArrow(new THREE.Vector3(depthX, depthY, dims.depth / 2), new THREE.Vector3(0, 0, -1), arrowMaterial);
+  addArrow(
+    new THREE.Vector3(depthX, depthY, -dims.depth / 2),
+    new THREE.Vector3(0, 0, 1),
+    arrowMaterial
+  );
+  addArrow(
+    new THREE.Vector3(depthX, depthY, dims.depth / 2),
+    new THREE.Vector3(0, 0, -1),
+    arrowMaterial
+  );
 
   function addArrow(position, direction, material) {
     const arrowGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
     const arrow = new THREE.Mesh(arrowGeometry, material);
     arrow.position.copy(position);
-    
+
     // Orient arrow in direction
     const axis = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion();
     quaternion.setFromUnitVectors(axis, direction);
     arrow.quaternion.copy(quaternion);
-    
+
     dimensionsGroup.add(arrow);
   }
 }
@@ -557,7 +1125,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Box type selection
   document.getElementById("boxType").addEventListener("change", (e) => {
     currentBoxType = e.target.value;
-    createBox().catch(err => {
+    // Update lid button visibility
+    const toggleLidBtn = document.getElementById("toggleLidBtn");
+    if (toggleLidBtn) {
+      if (currentBrand === "FRUTALUXE") {
+        toggleLidBtn.style.display = "flex";
+      } else {
+        toggleLidBtn.style.display = "none";
+      }
+    }
+    createBox().catch((err) => {
       console.error("Error creating box:", err);
     });
   });
@@ -565,10 +1142,21 @@ document.addEventListener("DOMContentLoaded", () => {
   // Brand selection
   document.querySelectorAll(".brand-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".brand-btn").forEach((b) => b.classList.remove("active"));
+      document
+        .querySelectorAll(".brand-btn")
+        .forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       currentBrand = btn.dataset.brand;
-      createBox().catch(err => {
+      // Update lid button visibility
+      const toggleLidBtn = document.getElementById("toggleLidBtn");
+      if (toggleLidBtn) {
+        if (currentBrand === "FRUTALUXE") {
+          toggleLidBtn.style.display = "flex";
+        } else {
+          toggleLidBtn.style.display = "none";
+        }
+      }
+      createBox().catch((err) => {
         console.error("Error creating box:", err);
       });
     });
@@ -582,8 +1170,30 @@ document.addEventListener("DOMContentLoaded", () => {
       openFlaps();
     }
   });
-  
-  document.getElementById("toggleDimensionsBtn").addEventListener("click", toggleDimensions);
+
+  const toggleLidBtn = document.getElementById("toggleLidBtn");
+  if (toggleLidBtn) {
+    toggleLidBtn.addEventListener("click", toggleLid);
+  }
+
+  document
+    .getElementById("toggleDimensionsBtn")
+    .addEventListener("click", toggleDimensions);
+
+  // Function to update lid button visibility
+  function updateLidButtonVisibility() {
+    const btn = document.getElementById("toggleLidBtn");
+    if (btn) {
+      if (currentBrand === "FRUTALUXE") {
+        btn.style.display = "flex";
+      } else {
+        btn.style.display = "none";
+      }
+    }
+  }
+
+  // Initial visibility
+  updateLidButtonVisibility();
 
   // Form submission
   document.getElementById("customBoxForm").addEventListener("submit", (e) => {
@@ -624,4 +1234,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
-
