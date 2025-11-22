@@ -290,12 +290,9 @@ async function createBox() {
   boxBody.receiveShadow = true;
   boxGroup.add(boxBody);
 
-  // For FRUTALUXE, create special lid structure with sides extending to bottom
-  const isFrutaluxe =
-    currentBrand === "FRUTALUXE" &&
-    hasCroppedTextures &&
-    croppedTextureSet?.interiors;
-  if (isFrutaluxe) {
+  // For brands with cropped textures and interior textures, create special lid structure with sides extending to bottom
+  const hasLidStructure = hasCroppedTextures && croppedTextureSet?.interiors;
+  if (hasLidStructure) {
     // Create lid group
     lidGroup = new THREE.Group();
     const lidThickness = 0.02;
@@ -443,7 +440,7 @@ async function createBox() {
         metalness: 0.05,
         side: THREE.DoubleSide,
         transparent: false, // Keep opaque - only holes will be transparent via alphaTest
-        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        alphaTest: 0.01, // Always enabled at low threshold to prevent black holes
         depthWrite: true,
       });
       const boxLeftMatInterior = new THREE.MeshStandardMaterial({
@@ -452,7 +449,7 @@ async function createBox() {
         metalness: 0.05,
         side: THREE.DoubleSide,
         transparent: false, // Keep opaque - only holes will be transparent via alphaTest
-        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        alphaTest: 0.01, // Always enabled at low threshold to prevent black holes
         depthWrite: true,
       });
       // Short sides use short side interior texture
@@ -462,7 +459,7 @@ async function createBox() {
         metalness: 0.05,
         side: THREE.DoubleSide,
         transparent: false, // Keep opaque - only holes will be transparent via alphaTest
-        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        alphaTest: 0.01, // Always enabled at low threshold to prevent black holes
         depthWrite: true,
       });
       const boxBackMatInterior = new THREE.MeshStandardMaterial({
@@ -471,8 +468,17 @@ async function createBox() {
         metalness: 0.05,
         side: THREE.DoubleSide,
         transparent: false, // Keep opaque - only holes will be transparent via alphaTest
-        alphaTest: 0, // Disabled initially, will be enabled when lid opens
+        alphaTest: 0.01, // Always enabled at low threshold to prevent black holes
         depthWrite: true,
+      });
+
+      // Create cardboard color material for bottom interior
+      const cardboardColor = 0xd8c3a5; // Cardboard brown color
+      const boxBottomMatInterior = new THREE.MeshStandardMaterial({
+        color: cardboardColor,
+        roughness: 0.9,
+        metalness: 0.02,
+        side: THREE.DoubleSide,
       });
 
       // Store materials for later updates
@@ -480,7 +486,7 @@ async function createBox() {
         boxRightMatInterior,
         boxLeftMatInterior,
         boxBody.material[2], // top (transparent)
-        boxBody.material[3], // bottom (keep exterior)
+        boxBottomMatInterior, // bottom (cardboard color for interior)
         boxFrontMatInterior,
         boxBackMatInterior,
       ];
@@ -513,7 +519,7 @@ async function createBox() {
     flapWidth
   );
   if (croppedTextureSet) {
-    if (isFrutaluxe) {
+    if (hasLidStructure) {
       // For FRUTALUXE, create materials with exterior on outside and cardboard on inside
       const cardboardColor = 0xd8c3a5; // Cardboard brown color
       const exteriorMat = new THREE.MeshStandardMaterial({
@@ -560,7 +566,7 @@ async function createBox() {
     dims.height,
     dims.depth / 2
   );
-  if (isFrutaluxe && lidGroup) {
+  if (hasLidStructure && lidGroup) {
     lidGroup.add(frontFlap);
   } else {
     boxGroup.add(frontFlap);
@@ -573,7 +579,7 @@ async function createBox() {
     flapWidth
   );
   if (croppedTextureSet) {
-    if (isFrutaluxe) {
+    if (hasLidStructure) {
       const cardboardColor = 0xd8c3a5;
       const exteriorMat = new THREE.MeshStandardMaterial({
         map: croppedTextureSet.flaps.top.short2,
@@ -618,7 +624,7 @@ async function createBox() {
     dims.height,
     -dims.depth / 2
   );
-  if (isFrutaluxe && lidGroup) {
+  if (hasLidStructure && lidGroup) {
     lidGroup.add(backFlap);
   } else {
     boxGroup.add(backFlap);
@@ -631,7 +637,7 @@ async function createBox() {
     dims.depth
   );
   if (croppedTextureSet) {
-    if (isFrutaluxe) {
+    if (hasLidStructure) {
       const cardboardColor = 0xd8c3a5;
       const exteriorMat = new THREE.MeshStandardMaterial({
         map: croppedTextureSet.flaps.top.long1,
@@ -676,7 +682,7 @@ async function createBox() {
     dims.height,
     0
   );
-  if (isFrutaluxe && lidGroup) {
+  if (hasLidStructure && lidGroup) {
     lidGroup.add(leftFlap);
   } else {
     boxGroup.add(leftFlap);
@@ -689,7 +695,7 @@ async function createBox() {
     dims.depth
   );
   if (croppedTextureSet) {
-    if (isFrutaluxe) {
+    if (hasLidStructure) {
       const cardboardColor = 0xd8c3a5;
       const exteriorMat = new THREE.MeshStandardMaterial({
         map: croppedTextureSet.flaps.top.long2,
@@ -734,7 +740,7 @@ async function createBox() {
     dims.height,
     0
   );
-  if (isFrutaluxe && lidGroup) {
+  if (hasLidStructure && lidGroup) {
     lidGroup.add(rightFlap);
   } else {
     boxGroup.add(rightFlap);
@@ -746,10 +752,20 @@ async function createBox() {
   scene.add(boxGroup);
   updateDimensions();
 
-  // Update lid button visibility
+  // Update lid button visibility - show for all brands with cropped textures
   const toggleLidBtn = document.getElementById("toggleLidBtn");
   if (toggleLidBtn) {
-    if (currentBrand === "FRUTALUXE") {
+    const brandsWithCroppedTextures = [
+      "FRUTALUXE",
+      "FRUTANA JOY",
+      "FRUTANA",
+      "FRUTANOVA",
+      "SINDIBAD",
+    ];
+    const hasCroppedTextures =
+      (currentBoxType === "22XU" || currentBoxType === "208") &&
+      brandsWithCroppedTextures.includes(currentBrand);
+    if (hasCroppedTextures) {
       toggleLidBtn.style.display = "flex";
     } else {
       toggleLidBtn.style.display = "none";
@@ -827,6 +843,7 @@ function closeFlaps() {
   });
   gsap.to(frontFlap.position, {
     z: dims.depth / 4,
+    y: dims.height, // Reset y position
     duration: 0.8,
     ease: "power2.inOut",
   });
@@ -839,6 +856,7 @@ function closeFlaps() {
   });
   gsap.to(backFlap.position, {
     z: -dims.depth / 4,
+    y: dims.height, // Reset y position
     duration: 0.8,
     ease: "power2.inOut",
   });
@@ -851,6 +869,7 @@ function closeFlaps() {
   });
   gsap.to(leftFlap.position, {
     x: -dims.width / 4,
+    y: dims.height, // Reset y position
     duration: 0.8,
     ease: "power2.inOut",
   });
@@ -863,6 +882,7 @@ function closeFlaps() {
   });
   gsap.to(rightFlap.position, {
     x: dims.width / 4,
+    y: dims.height, // Reset y position
     duration: 0.8,
     ease: "power2.inOut",
   });
@@ -875,61 +895,74 @@ function openFlaps() {
   flapsOpen = true;
   const dims = boxDimensions[currentBoxType];
   const flapWidth = dims.depth / 2;
+  const flapThickness = 0.02;
 
-  // Front flap - rotate to hang down at front
+  // 60 degrees from horizontal = 30 degrees from vertical (π/6 radians)
+  const tiltAngle = Math.PI / 6; // 30 degrees in radians
+
+  // When flap tilts 60° from horizontal, the center moves outward horizontally
+  // but stays at the same vertical level (y = dims.height)
+  // Horizontal offset: (flapWidth/2) * sin(tiltAngle) - moves the center outward
+  const horizontalOffset = (flapWidth / 2) * Math.sin(tiltAngle);
+
+  // Front flap - tilt 60° from horizontal (30° from vertical), tilted forward (outward)
   gsap.to(frontFlap.rotation, {
-    x: 0,
+    x: tiltAngle, // 30° tilted forward from vertical = 60° from horizontal
     duration: 0.8,
     ease: "power2.inOut",
   });
   gsap.to(frontFlap.position, {
-    z: dims.depth / 2 + flapWidth / 2,
+    z: dims.depth / 2 + horizontalOffset, // Move outward as it tilts
+    y: dims.height, // Keep at same height - no downward movement
     duration: 0.8,
     ease: "power2.inOut",
   });
 
-  // Back flap - rotate to hang down at back
+  // Back flap - tilt 60° from horizontal (30° from vertical), tilted backward (outward)
   gsap.to(backFlap.rotation, {
-    x: 0,
+    x: -tiltAngle, // -30° tilted backward from vertical = 60° from horizontal
     duration: 0.8,
     ease: "power2.inOut",
   });
   gsap.to(backFlap.position, {
-    z: -dims.depth / 2 - flapWidth / 2,
+    z: -dims.depth / 2 - horizontalOffset, // Move outward as it tilts
+    y: dims.height, // Keep at same height - no downward movement
     duration: 0.8,
     ease: "power2.inOut",
   });
 
-  // Left flap - rotate to hang down on left
+  // Left flap - tilt 60° from horizontal (30° from vertical), tilted left (outward)
   gsap.to(leftFlap.rotation, {
-    z: 0,
+    z: tiltAngle, // 30° tilted left from vertical = 60° from horizontal
     duration: 0.8,
     ease: "power2.inOut",
   });
   gsap.to(leftFlap.position, {
-    x: -dims.width / 2 - flapWidth / 2,
+    x: -dims.width / 2 - horizontalOffset, // Move outward as it tilts
+    y: dims.height, // Keep at same height - no downward movement
     duration: 0.8,
     ease: "power2.inOut",
   });
 
-  // Right flap - rotate to hang down on right
+  // Right flap - tilt 60° from horizontal (30° from vertical), tilted right (outward)
   gsap.to(rightFlap.rotation, {
-    z: 0,
+    z: -tiltAngle, // -30° tilted right from vertical = 60° from horizontal
     duration: 0.8,
     ease: "power2.inOut",
   });
   gsap.to(rightFlap.position, {
-    x: dims.width / 2 + flapWidth / 2,
+    x: dims.width / 2 + horizontalOffset, // Move outward as it tilts
+    y: dims.height, // Keep at same height - no downward movement
     duration: 0.8,
     ease: "power2.inOut",
   });
 }
 
-// Update textures based on lid state (for FRUTALUXE)
+// Update textures based on lid state (for brands with lid structure)
 function updateLidTextures() {
-  if (currentBrand !== "FRUTALUXE" || !lidGroup || !boxBody) return;
+  if (!lidGroup || !boxBody) return;
 
-  // Enable/disable alphaTest on box body materials based on lid state
+  // Adjust alphaTest threshold on box body materials based on lid state
   // alphaTest makes only the holes transparent (where alpha < threshold)
   // The rest of the side remains opaque
   if (
@@ -939,19 +972,19 @@ function updateLidTextures() {
     boxBody.userData.interiorMaterials.forEach((mat, index) => {
       // Skip top and bottom faces (indices 2 and 3)
       if (index !== 2 && index !== 3 && mat && mat.isMeshStandardMaterial) {
-        // Enable alphaTest when lid is open to make holes transparent
-        // alphaTest: 0 means disabled (no transparency)
-        // alphaTest: 0.1 means pixels with alpha < 0.1 are discarded (transparent)
-        mat.alphaTest = lidOpen ? 0.1 : 0;
+        // Adjust alphaTest threshold based on lid state
+        // When lid is open: higher threshold (0.1) for more visible holes
+        // When lid is closed: lower threshold (0.01) to prevent black holes but keep them subtle
+        mat.alphaTest = lidOpen ? 0.1 : 0.01;
         mat.needsUpdate = true;
       }
     });
   }
 }
 
-// Toggle lid lift (for FRUTALUXE)
+// Toggle lid lift (for brands with lid structure)
 function toggleLid() {
-  if (currentBrand !== "FRUTALUXE" || !lidGroup) return;
+  if (!lidGroup) return;
 
   lidOpen = !lidOpen;
   const dims = boxDimensions[currentBoxType];
@@ -1147,10 +1180,20 @@ document.addEventListener("DOMContentLoaded", () => {
         .forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
       currentBrand = btn.dataset.brand;
-      // Update lid button visibility
+      // Update lid button visibility - show for all brands with cropped textures
       const toggleLidBtn = document.getElementById("toggleLidBtn");
       if (toggleLidBtn) {
-        if (currentBrand === "FRUTALUXE") {
+        const brandsWithCroppedTextures = [
+          "FRUTALUXE",
+          "FRUTANA JOY",
+          "FRUTANA",
+          "FRUTANOVA",
+          "SINDIBAD",
+        ];
+        const hasCroppedTextures =
+          (currentBoxType === "22XU" || currentBoxType === "208") &&
+          brandsWithCroppedTextures.includes(currentBrand);
+        if (hasCroppedTextures) {
           toggleLidBtn.style.display = "flex";
         } else {
           toggleLidBtn.style.display = "none";
