@@ -43,7 +43,7 @@ function init() {
 
   // Camera
   camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-  camera.position.set(15, 8, 15);
+  camera.position.set(20, 12, 20); // Zoomed out more for better visibility
   camera.lookAt(0, 0, 0);
 
   // Renderer
@@ -59,8 +59,8 @@ function init() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
   controls.rotateSpeed = 0.5;
-  controls.minDistance = 8;
-  controls.maxDistance = 40;
+  controls.minDistance = 10;
+  controls.maxDistance = 60; // Increased max zoom out distance
   controls.enablePan = false;
   controls.autoRotate = false;
 
