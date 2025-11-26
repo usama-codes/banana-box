@@ -127,7 +127,17 @@ export async function loadTexture(brand, boxType) {
  */
 export async function loadFrutaluxeCroppedTextures22XU() {
   const cacheKey = `FRUTALUXE_22XU_CROPPED_SET`;
-  if (textureCache[cacheKey]) return textureCache[cacheKey];
+  // Clear cache to force reload with new settings
+  if (textureCache[cacheKey]) {
+    const oldSet = textureCache[cacheKey];
+    Object.values(oldSet.faces || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.interiors || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.top || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.bottom || {}).forEach((tex) =>
+      tex?.dispose?.()
+    );
+    delete textureCache[cacheKey];
+  }
 
   const base = `assets/textures/cropped pngs/22xu/FRUTALUXE/`;
   const files = {
@@ -163,15 +173,28 @@ export async function loadFrutaluxeCroppedTextures22XU() {
         base + path,
         (tex) => {
           tex.flipY = false;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.colorSpace = THREE.SRGBColorSpace;
-          // Flip texture horizontally
-          tex.repeat.set(-1, 1);
-          tex.offset.set(1, 0);
-          // Rotate 180 degrees clockwise
-          tex.rotation = Math.PI;
-          tex.center.set(0.5, 0.5);
+
+          // Different settings for flap textures to align patterns with sides
+          if (key.includes("flap")) {
+            // === FLAP TEXTURE SETTINGS - Rotated 180° to align wave pattern ===
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(1, 1); // No stretching, maintain aspect ratio
+            tex.offset.set(0, 0);
+            // Rotate 180 degrees clockwise (π radians) to align far right corner of flap with top left corner of side
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5); // Rotation center point
+          } else {
+            // === SIDE & INTERIOR TEXTURE SETTINGS ===
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, 1); // Flip horizontally
+            tex.offset.set(1, 0);
+            tex.rotation = Math.PI; // 180 degrees clockwise
+            tex.center.set(0.5, 0.5);
+          }
+
           // Enable alpha channel for interior textures (needed for holes transparency)
           if (key.includes("interior")) {
             tex.format = THREE.RGBAFormat;
@@ -228,7 +251,17 @@ export async function loadFrutaluxeCroppedTextures22XU() {
  */
 export async function loadFrutanaJoyCroppedTextures22XU() {
   const cacheKey = `FRUTANA_JOY_22XU_CROPPED_SET`;
-  if (textureCache[cacheKey]) return textureCache[cacheKey];
+  // Clear cache to force reload with new settings
+  if (textureCache[cacheKey]) {
+    const oldSet = textureCache[cacheKey];
+    Object.values(oldSet.faces || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.interiors || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.top || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.bottom || {}).forEach((tex) =>
+      tex?.dispose?.()
+    );
+    delete textureCache[cacheKey];
+  }
 
   const base = `assets/textures/cropped pngs/22xu/FRUTANA JOY/`;
   const files = {
@@ -243,10 +276,10 @@ export async function loadFrutanaJoyCroppedTextures22XU() {
     interior_short: `short side interior.png`,
 
     // Top flap faces
-    flap_long1: `long 1 flap.png`,
-    flap_long2: `long 2 flap.png`,
-    flap_short1: `short 1 flap bottom.png`,
-    flap_short2: `short 2 flap bottom.png`,
+    flap_long1: `long side 1 flap.png`,
+    flap_long2: `long side 2 flap.png`,
+    flap_short1: `short side 1 flap.png`,
+    flap_short2: `short side 2 flap.png`,
 
     // Bottom flap faces
     flap_bottom_long1: `long side bottom flap.png`,
@@ -264,15 +297,27 @@ export async function loadFrutanaJoyCroppedTextures22XU() {
         base + path,
         (tex) => {
           tex.flipY = false;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.colorSpace = THREE.SRGBColorSpace;
-          // Flip texture horizontally
-          tex.repeat.set(-1, 1);
-          tex.offset.set(1, 0);
-          // Rotate 180 degrees clockwise
-          tex.rotation = Math.PI;
-          tex.center.set(0.5, 0.5);
+
+          // Different settings for flap textures to align patterns with sides
+          if (key.includes("flap")) {
+            // === FLAP TEXTURE SETTINGS - Adjust these to align pattern ===
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(1, 1);
+            tex.offset.set(0, 0);
+            tex.rotation = 0;
+            tex.center.set(0.5, 0.5);
+          } else {
+            // === SIDE & INTERIOR TEXTURE SETTINGS ===
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, 1);
+            tex.offset.set(1, 0);
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5);
+          }
+
           // Enable alpha channel for interior textures (needed for holes transparency)
           if (key.includes("interior")) {
             tex.format = THREE.RGBAFormat;
@@ -377,16 +422,28 @@ export async function loadFrutanaCroppedTextures22XU() {
       loader.load(
         base + path,
         (tex) => {
-          tex.flipY = false; // Changed to false to match other brands
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.flipY = false;
           tex.colorSpace = THREE.SRGBColorSpace;
-          // Flip horizontally
-          tex.repeat.set(-1, 1);
-          tex.offset.set(1, 0);
-          // Rotate 180 degrees clockwise
-          tex.rotation = Math.PI;
-          tex.center.set(0.5, 0.5);
+
+          // Different settings for flap textures to align patterns with sides
+          if (key.includes("flap")) {
+            // === FLAP TEXTURE SETTINGS - Adjust these to align pattern ===
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(1, 1);
+            tex.offset.set(0, 0);
+            tex.rotation = 0;
+            tex.center.set(0.5, 0.5);
+          } else {
+            // === SIDE & INTERIOR TEXTURE SETTINGS ===
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, 1);
+            tex.offset.set(1, 0);
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5);
+          }
+
           // Enable alpha channel for interior textures (needed for holes transparency)
           if (key.includes("interior")) {
             tex.format = THREE.RGBAFormat;
@@ -443,7 +500,17 @@ export async function loadFrutanaCroppedTextures22XU() {
  */
 export async function loadFrutanovaCroppedTextures22XU() {
   const cacheKey = `FRUTANOVA_22XU_CROPPED_SET`;
-  if (textureCache[cacheKey]) return textureCache[cacheKey];
+  // Clear cache to force reload with new settings
+  if (textureCache[cacheKey]) {
+    const oldSet = textureCache[cacheKey];
+    Object.values(oldSet.faces || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.interiors || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.top || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.bottom || {}).forEach((tex) =>
+      tex?.dispose?.()
+    );
+    delete textureCache[cacheKey];
+  }
 
   const base = `assets/textures/cropped pngs/22xu/FRUTANOVA OUT/`;
   const files = {
@@ -479,15 +546,27 @@ export async function loadFrutanovaCroppedTextures22XU() {
         base + path,
         (tex) => {
           tex.flipY = false;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.colorSpace = THREE.SRGBColorSpace;
-          // Flip texture horizontally
-          tex.repeat.set(-1, 1);
-          tex.offset.set(1, 0);
-          // Rotate 180 degrees clockwise
-          tex.rotation = Math.PI;
-          tex.center.set(0.5, 0.5);
+
+          // Different settings for flap textures to align patterns with sides
+          if (key.includes("flap")) {
+            // === FLAP TEXTURE SETTINGS - Adjust these to align pattern ===
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(1, 1);
+            tex.offset.set(0, 0);
+            tex.rotation = 0;
+            tex.center.set(0.5, 0.5);
+          } else {
+            // === SIDE & INTERIOR TEXTURE SETTINGS ===
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, 1);
+            tex.offset.set(1, 0);
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5);
+          }
+
           // Enable alpha channel for interior textures (needed for holes transparency)
           if (key.includes("interior")) {
             tex.format = THREE.RGBAFormat;
@@ -543,7 +622,17 @@ export async function loadFrutanovaCroppedTextures22XU() {
  */
 export async function loadSindibadCroppedTextures22XU() {
   const cacheKey = `SINDIBAD_22XU_CROPPED_SET`;
-  if (textureCache[cacheKey]) return textureCache[cacheKey];
+  // Clear cache to force reload with new settings
+  if (textureCache[cacheKey]) {
+    const oldSet = textureCache[cacheKey];
+    Object.values(oldSet.faces || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.interiors || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.top || {}).forEach((tex) => tex?.dispose?.());
+    Object.values(oldSet.flaps?.bottom || {}).forEach((tex) =>
+      tex?.dispose?.()
+    );
+    delete textureCache[cacheKey];
+  }
 
   const base = `assets/textures/cropped pngs/22xu/SINDIBAD OUT/`;
   const files = {
@@ -579,15 +668,28 @@ export async function loadSindibadCroppedTextures22XU() {
         base + path,
         (tex) => {
           tex.flipY = false;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.colorSpace = THREE.SRGBColorSpace;
-          // Flip texture horizontally
-          tex.repeat.set(-1, 1);
-          tex.offset.set(1, 0);
-          // Rotate 180 degrees clockwise
-          tex.rotation = Math.PI;
-          tex.center.set(0.5, 0.5);
+
+          // Different settings for flap textures to align patterns with sides
+          if (key.includes("flap")) {
+            // === FLAP TEXTURE SETTINGS - Rotated 180° to align wave pattern ===
+            tex.wrapS = THREE.ClampToEdgeWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, -1); // Keep existing flip settings
+            tex.offset.set(0, 0);
+            // Rotate 180 degrees clockwise (π radians) to align far right corner of flap with top left corner of side
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5);
+          } else {
+            // === SIDE & INTERIOR TEXTURE SETTINGS ===
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.ClampToEdgeWrapping;
+            tex.repeat.set(-1, 1);
+            tex.offset.set(1, 0);
+            tex.rotation = Math.PI;
+            tex.center.set(0.5, 0.5);
+          }
+
           // Enable alpha channel for interior textures (needed for holes transparency)
           if (key.includes("interior")) {
             tex.format = THREE.RGBAFormat;
