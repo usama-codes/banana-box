@@ -107,7 +107,7 @@ function init() {
   plane.receiveShadow = true;
   scene.add(plane);
 
-  // Grid helper (subtle)
+  // Grid helper (subtle) - kept for reference but could be hidden if needed
   const gridHelper = new THREE.GridHelper(20, 20, 0xcccccc, 0xe0e0e0);
   gridHelper.position.y = -0.005;
   scene.add(gridHelper);
@@ -527,6 +527,9 @@ async function createBox() {
         roughness: 0.75,
         metalness: 0.05,
         side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
       });
       const interiorMat = new THREE.MeshStandardMaterial({
         color: cardboardColor,
@@ -586,6 +589,9 @@ async function createBox() {
         roughness: 0.75,
         metalness: 0.05,
         side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 2,
+        polygonOffsetUnits: 2,
       });
       const interiorMat = new THREE.MeshStandardMaterial({
         color: cardboardColor,
@@ -644,6 +650,9 @@ async function createBox() {
         roughness: 0.75,
         metalness: 0.05,
         side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 3,
+        polygonOffsetUnits: 3,
       });
       const interiorMat = new THREE.MeshStandardMaterial({
         color: cardboardColor,
@@ -702,6 +711,9 @@ async function createBox() {
         roughness: 0.75,
         metalness: 0.05,
         side: THREE.FrontSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 4,
+        polygonOffsetUnits: 4,
       });
       const interiorMat = new THREE.MeshStandardMaterial({
         color: cardboardColor,
@@ -989,11 +1001,15 @@ function toggleLid() {
   lidOpen = !lidOpen;
   const dims = boxDimensions[currentBoxType];
   const liftHeight = dims.height + 0.5; // Lift lid above the box
+  const sideOffset = dims.width * 1.2; // Move lid to the side (to the right)
 
   if (lidOpen) {
-    // Lift the lid
+    // Lift the lid straight up, then translate it to the side on X axis
+    // This allows viewing the box contents from above without the lid blocking
     gsap.to(lidGroup.position, {
-      y: liftHeight,
+      y: liftHeight, // Lift up
+      x: sideOffset, // Move to the side (positive X = right)
+      z: 0, // Keep Z at 0 (no forward/backward movement)
       duration: 1.0,
       ease: "power2.inOut",
       onUpdate: () => {
@@ -1004,9 +1020,11 @@ function toggleLid() {
       },
     });
   } else {
-    // Lower the lid
+    // Reset position (bring lid back down and to center)
     gsap.to(lidGroup.position, {
       y: 0,
+      x: 0,
+      z: 0,
       duration: 1.0,
       ease: "power2.inOut",
       onUpdate: () => {
@@ -1205,14 +1223,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Control buttons
-  document.getElementById("openFlapsBtn").addEventListener("click", () => {
-    if (flapsOpen) {
-      closeFlaps();
-    } else {
-      openFlaps();
-    }
-  });
+  // Control buttons - Flap animation removed
+  // document.getElementById("openFlapsBtn").addEventListener("click", () => {
+  //   if (flapsOpen) {
+  //     closeFlaps();
+  //   } else {
+  //     openFlaps();
+  //   }
+  // });
 
   const toggleLidBtn = document.getElementById("toggleLidBtn");
   if (toggleLidBtn) {

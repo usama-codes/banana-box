@@ -1,0 +1,22 @@
+{
+  "name": "banana-box-3d-viewer",
+  "version": "1.0.0",
+  "description": "3D visualization of banana boxes with texture processing utilities",
+  "type": "module",
+  "scripts": {
+    "remove-guide-lines": "node scripts/remove-guide-lines.js",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0",
+    "gsap": "^3.12.5"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "sharp": "^0.33.0",
+    "glob": "^10.3.0"
+  }
+}
+
