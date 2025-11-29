@@ -1,6 +1,7 @@
 // Import Three.js modules
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import {
   loadTexture,
   loadFrutaluxeCroppedTextures22XU,
@@ -16,6 +17,7 @@ let scene, camera, renderer, controls;
 let boxGroup, leftFlap, rightFlap, frontFlap, backFlap, boxBody;
 let lidGroup, lidRight, lidLeft, lidFront, lidBack; // Lid structure for FRUTALUXE
 let bananas = []; // Array to hold banana objects
+let bananaModel = null; // Cached banana GLB model
 let dimensionsVisible = false;
 let dimensionsGroup;
 let currentBrand = "FRUTANA";
@@ -511,12 +513,14 @@ async function createBox() {
   // Flaps are positioned at the top edge of the box, starting in CLOSED position
   const flapThickness = 0.02;
   const flapWidth = dims.depth / 2; // Flaps extend to cover the top when closed
+  const overlapAmount = 0.05; // Amount of overlap to eliminate gaps
+  const positionShift = 0.025; // Position adjustment to create overlap
 
   // Front top flap - starts CLOSED (laying flat on top)
   const frontFlapGeometry = new THREE.BoxGeometry(
     dims.width,
     flapThickness,
-    flapWidth
+    flapWidth + overlapAmount // Increase depth to create overlap
   );
   if (croppedTextureSet) {
     if (hasLidStructure) {
@@ -560,7 +564,7 @@ async function createBox() {
   } else {
     frontFlap = new THREE.Mesh(frontFlapGeometry, flapMaterial);
   }
-  frontFlap.position.set(0, dims.height, dims.depth / 4);
+  frontFlap.position.set(0, dims.height, dims.depth / 4 - positionShift); // Shift toward center for overlap
   frontFlap.rotation.x = -Math.PI; // 180° closed
   frontFlap.castShadow = true;
   frontFlap.receiveShadow = true;
@@ -579,7 +583,7 @@ async function createBox() {
   const backFlapGeometry = new THREE.BoxGeometry(
     dims.width,
     flapThickness,
-    flapWidth
+    flapWidth + overlapAmount // Increase depth to create overlap
   );
   if (croppedTextureSet) {
     if (hasLidStructure) {
@@ -621,7 +625,7 @@ async function createBox() {
   } else {
     backFlap = new THREE.Mesh(backFlapGeometry, flapMaterial);
   }
-  backFlap.position.set(0, dims.height, -dims.depth / 4);
+  backFlap.position.set(0, dims.height, -dims.depth / 4 + positionShift); // Shift toward center for overlap
   backFlap.rotation.x = Math.PI; // 180° closed
   backFlap.castShadow = true;
   backFlap.receiveShadow = true;
@@ -638,7 +642,7 @@ async function createBox() {
 
   // Left top flap - starts CLOSED (laying flat on top)
   const leftFlapGeometry = new THREE.BoxGeometry(
-    flapWidth,
+    flapWidth + overlapAmount, // Increase width to create overlap
     flapThickness,
     dims.depth
   );
@@ -682,7 +686,7 @@ async function createBox() {
   } else {
     leftFlap = new THREE.Mesh(leftFlapGeometry, flapMaterial);
   }
-  leftFlap.position.set(-dims.width / 4, dims.height, 0);
+  leftFlap.position.set(-dims.width / 4 + positionShift, dims.height, 0); // Shift toward center for overlap
   leftFlap.rotation.z = Math.PI; // 180° closed
   leftFlap.castShadow = true;
   leftFlap.receiveShadow = true;
@@ -699,7 +703,7 @@ async function createBox() {
 
   // Right top flap - starts CLOSED (laying flat on top)
   const rightFlapGeometry = new THREE.BoxGeometry(
-    flapWidth,
+    flapWidth + overlapAmount, // Increase width to create overlap
     flapThickness,
     dims.depth
   );
@@ -743,7 +747,7 @@ async function createBox() {
   } else {
     rightFlap = new THREE.Mesh(rightFlapGeometry, flapMaterial);
   }
-  rightFlap.position.set(dims.width / 4, dims.height, 0);
+  rightFlap.position.set(dims.width / 4 - positionShift, dims.height, 0); // Shift toward center for overlap
   rightFlap.rotation.z = -Math.PI; // 180° closed
   rightFlap.castShadow = true;
   rightFlap.receiveShadow = true;
@@ -759,7 +763,7 @@ async function createBox() {
   }
 
   // Create bananas inside the box
-  createBananas(dims);
+  await createBananas(dims);
 
   scene.add(boxGroup);
   updateDimensions();
@@ -793,182 +797,402 @@ async function createBox() {
   updateLidTextures();
 }
 
+// Load banana GLB model
+async function loadBananaModel() {
+  if (bananaModel) {
+    return bananaModel; // Return cached model
+  }
+
+  return new Promise((resolve, reject) => {
+    const loader = new GLTFLoader();
+    loader.load(
+      "assets/textures/banana.glb",
+      (gltf) => {
+        bananaModel = gltf.scene;
+        // Enable shadows on all meshes in the model
+        bananaModel.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        resolve(bananaModel);
+      },
+      undefined,
+      (error) => {
+        console.error("Failed to load banana model:", error);
+        reject(error);
+      }
+    );
+  });
+}
+
 // Create banana geometry inside the box
-function createBananas(dims) {
+async function createBananas(dims) {
   // Clear existing bananas
   bananas.forEach((banana) => {
     boxGroup.remove(banana);
-    if (banana.geometry) banana.geometry.dispose();
-    if (banana.material) banana.material.dispose();
+    // Dispose of cloned model resources
+    banana.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach((mat) => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
   });
   bananas = [];
 
-  // Banana material - bright yellow/green for unripe bananas
-  const bananaMaterial = new THREE.MeshStandardMaterial({
-    color: 0x8bc34a, // Green color for unripe bananas
-    roughness: 0.6,
-    metalness: 0.1,
-  });
+  try {
+    // Step 1: Load banana GLB and compute its bounding box
+    const model = await loadBananaModel();
 
-  // Create curved banana shape using bent cylinder
-  const bananaCount = 8;
-  const bananaRadius = 0.08;
-  const bananaLength = 0.6;
+    // Traverse to find the actual mesh if needed
+    let bananaMesh = model;
+    model.traverse((child) => {
+      if (child.isMesh) {
+        bananaMesh = child;
+      }
+    });
 
-  for (let i = 0; i < bananaCount; i++) {
-    const banana = createBanana(bananaRadius, bananaLength, bananaMaterial);
+    // Compute banana bounding box
+    const bananaBB = new THREE.Box3().setFromObject(model);
+    const bananaSize = new THREE.Vector3();
+    bananaBB.getSize(bananaSize);
 
-    // Position bananas inside the box in a cluster
-    const row = Math.floor(i / 4);
-    const col = i % 4;
-    const x = (col - 1.5) * 0.4;
-    const z = (row - 0.5) * 0.5;
-    const y = dims.height * 0.3;
+    // Step 2: Measure the inner dimensions of the box
+    // Get the box body's bounding box
+    const boxBB = new THREE.Box3().setFromObject(boxBody);
+    const boxSize = new THREE.Vector3();
+    boxBB.getSize(boxSize);
 
-    banana.position.set(x, y, z);
-    banana.rotation.x = Math.random() * 0.5 - 0.25;
-    banana.rotation.y = Math.random() * Math.PI;
-    banana.rotation.z = Math.random() * 0.5 - 0.25;
+    // Account for wall thickness to get internal cavity dimensions
+    const wallThickness = 0.02; // 2mm wall thickness
+    const internalSize = new THREE.Vector3(
+      boxSize.x - wallThickness * 2, // Subtract walls on both sides
+      boxSize.y - wallThickness, // Subtract bottom only (top is open)
+      boxSize.z - wallThickness * 2 // Subtract walls on both sides
+    );
 
-    banana.castShadow = true;
-    banana.receiveShadow = true;
+    // Step 3: Derive scale factor using grid-based packing
+    // Use 2 rows x 4 columns for 8 bananas total
+    const bananaRows = 2;
+    const bananaCols = 4;
+    const countY = 1; // Single layer only (bananas sit on bottom)
 
-    boxGroup.add(banana);
-    bananas.push(banana);
+    // Calculate cell dimensions based on grid layout
+    const cellX = internalSize.x / bananaCols; // Width per column
+    const cellY = internalSize.y / countY; // Height per layer
+    const cellZ = internalSize.z / bananaRows; // Depth per row
+
+    // Derive scale factor to fit bananas in cells
+    const scaleX = cellX / bananaSize.x;
+    const scaleY = cellY / bananaSize.y;
+    const scaleZ = cellZ / bananaSize.z;
+    const scaleFactor = Math.min(scaleX, scaleY, scaleZ);
+
+    // Calculate scaled banana size (for logging)
+    const scaledBananaSize = bananaSize.clone().multiplyScalar(scaleFactor);
+
+    console.log(
+      `Banana original size: ${bananaSize.x.toFixed(
+        3
+      )} x ${bananaSize.y.toFixed(3)} x ${bananaSize.z.toFixed(3)}`
+    );
+    console.log(
+      `Box internal size: ${internalSize.x.toFixed(
+        3
+      )} x ${internalSize.y.toFixed(3)} x ${internalSize.z.toFixed(3)}`
+    );
+    console.log(
+      `Grid: ${bananaCols} x ${countY} x ${bananaRows} = ${
+        bananaCols * countY * bananaRows
+      } bananas`
+    );
+    console.log(
+      `Cell size: ${cellX.toFixed(3)} x ${cellY.toFixed(3)} x ${cellZ.toFixed(
+        3
+      )}`
+    );
+    console.log(`Scale factor: ${scaleFactor.toFixed(3)}`);
+    console.log(
+      `Scaled banana size: ${scaledBananaSize.x.toFixed(
+        3
+      )} x ${scaledBananaSize.y.toFixed(3)} x ${scaledBananaSize.z.toFixed(3)}`
+    );
+
+    // Step 4: Clone bananas and place them in grid pattern using bounding-box-safe positioning
+    // Calculate internal box bounds (accounting for boxBody position)
+    // The box floor is at boxBB.min.y (bottom of the box geometry)
+    const floorY = boxBB.min.y + wallThickness; // Actual floor of internal cavity
+
+    const internalMin = new THREE.Vector3(
+      boxBB.min.x + wallThickness,
+      floorY,
+      boxBB.min.z + wallThickness
+    );
+    const internalMax = new THREE.Vector3(
+      boxBB.max.x - wallThickness,
+      boxBB.max.y - wallThickness, // Top is open, but account for bottom
+      boxBB.max.z - wallThickness
+    );
+
+    // Use rows and columns for grid placement
+    const internalMinX = internalMin.x;
+    const internalMaxX = internalMax.x;
+    const internalMinZ = internalMin.z;
+    const internalMaxZ = internalMax.z;
+
+    // Calculate spacing for grid cells
+    const spacingX = (internalMaxX - internalMinX) / bananaCols;
+    const spacingZ = (internalMaxZ - internalMinZ) / bananaRows;
+
+    for (let r = 0; r < bananaRows; r++) {
+      for (let c = 0; c < bananaCols; c++) {
+        const banana = model.clone();
+
+        // Apply scale to the cloned banana
+        banana.scale.setScalar(scaleFactor);
+
+        // Add slight random rotation for natural look
+        banana.rotation.x = (Math.random() - 0.5) * 0.2;
+        banana.rotation.y = Math.random() * Math.PI * 0.3;
+        banana.rotation.z = (Math.random() - 0.5) * 0.2;
+
+        // Enable shadows
+        banana.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        // First insert into the same container (boxGroup)
+        boxGroup.add(banana);
+
+        // Calculate grid cell center positions
+        const centerX = internalMinX + spacingX * (c + 0.5);
+        const centerZ = internalMinZ + spacingZ * (r + 0.5);
+
+        // Set initial position at cell center
+        banana.position.set(centerX, 0, centerZ);
+
+        // Update matrix world to get banana in final coordinate space
+        banana.updateMatrixWorld(true);
+
+        // Compute bounding box after positioning
+        const bb = new THREE.Box3().setFromObject(banana);
+
+        // Clamp X position to keep banana within bounds
+        if (bb.min.x < internalMinX) {
+          banana.position.x += internalMinX - bb.min.x;
+        } else if (bb.max.x > internalMaxX) {
+          banana.position.x -= bb.max.x - internalMaxX;
+        }
+
+        // Clamp Z position to keep banana within bounds
+        if (bb.min.z < internalMinZ) {
+          banana.position.z += internalMinZ - bb.min.z;
+        } else if (bb.max.z > internalMaxZ) {
+          banana.position.z -= bb.max.z - internalMaxZ;
+        }
+
+        // Update matrix world after bounds clamping
+        banana.updateMatrixWorld(true);
+
+        // Compute bounding box again after clamping
+        const bb2 = new THREE.Box3().setFromObject(banana);
+
+        // Delta from pivot to bottom (relative to banana's own position)
+        const pivotToBottom = bb2.min.y - banana.position.y;
+
+        // Correct Y position: floorY - pivotToBottom ensures bottom aligns with floor
+        banana.position.y = floorY - pivotToBottom;
+
+        // Final update after Y positioning
+        banana.updateMatrixWorld(true);
+
+        bananas.push(banana);
+      }
+    }
+  } catch (error) {
+    console.error("Error creating bananas:", error);
+    // Fallback to geometric bananas if GLB loading fails
+    const bananaMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8bc34a,
+      roughness: 0.6,
+      metalness: 0.1,
+    });
+
+    const bananaCount = 4;
+    const bananaRadius = 0.08;
+    const bananaLength = 0.6;
+
+    // Scale fallback bananas to fit box
+    const maxLength = Math.min(dims.width, dims.depth) * 0.4;
+    const scaleFactor = maxLength / bananaLength;
+    const scaledRadius = bananaRadius * scaleFactor;
+    const scaledLength = bananaLength * scaleFactor;
+
+    for (let i = 0; i < bananaCount; i++) {
+      const banana = createBanana(scaledRadius, scaledLength, bananaMaterial);
+
+      const row = Math.floor(i / 2);
+      const col = i % 2;
+      const spacingX = dims.width * 0.3;
+      const spacingZ = dims.depth * 0.3;
+      const x = (col - 0.5) * spacingX;
+      const z = (row - 0.5) * spacingZ;
+      const y = dims.height * 0.4;
+
+      banana.position.set(x, y, z);
+      banana.rotation.x = Math.random() * 0.3 - 0.15;
+      banana.rotation.y = Math.random() * Math.PI * 0.5;
+      banana.rotation.z = Math.random() * 0.2 - 0.1;
+
+      banana.castShadow = true;
+      banana.receiveShadow = true;
+
+      boxGroup.add(banana);
+      bananas.push(banana);
+    }
   }
 }
 
 // Geometry and texture loading are now handled in separate modules
 
 // Close flaps to form the lid
-function closeFlaps() {
-  if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
+// function closeFlaps() {
+//   if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
 
-  flapsOpen = false;
-  const dims = boxDimensions[currentBoxType];
+//   flapsOpen = false;
+//   const dims = boxDimensions[currentBoxType];
 
-  // Front flap - rotate to lay flat on top
-  gsap.to(frontFlap.rotation, {
-    x: -Math.PI,
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(frontFlap.position, {
-    z: dims.depth / 4,
-    y: dims.height, // Reset y position
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Front flap - rotate to lay flat on top
+//   gsap.to(frontFlap.rotation, {
+//     x: -Math.PI,
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(frontFlap.position, {
+//     z: dims.depth / 4,
+//     y: dims.height, // Reset y position
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Back flap - rotate to lay flat on top
-  gsap.to(backFlap.rotation, {
-    x: Math.PI,
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(backFlap.position, {
-    z: -dims.depth / 4,
-    y: dims.height, // Reset y position
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Back flap - rotate to lay flat on top
+//   gsap.to(backFlap.rotation, {
+//     x: Math.PI,
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(backFlap.position, {
+//     z: -dims.depth / 4,
+//     y: dims.height, // Reset y position
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Left flap - rotate to lay flat on top
-  gsap.to(leftFlap.rotation, {
-    z: Math.PI,
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(leftFlap.position, {
-    x: -dims.width / 4,
-    y: dims.height, // Reset y position
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Left flap - rotate to lay flat on top
+//   gsap.to(leftFlap.rotation, {
+//     z: Math.PI,
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(leftFlap.position, {
+//     x: -dims.width / 4,
+//     y: dims.height, // Reset y position
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Right flap - rotate to lay flat on top
-  gsap.to(rightFlap.rotation, {
-    z: -Math.PI,
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(rightFlap.position, {
-    x: dims.width / 4,
-    y: dims.height, // Reset y position
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-}
+//   // Right flap - rotate to lay flat on top
+//   gsap.to(rightFlap.rotation, {
+//     z: -Math.PI,
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(rightFlap.position, {
+//     x: dims.width / 4,
+//     y: dims.height, // Reset y position
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+// }
 
-// Open flaps to hang on the sides
-function openFlaps() {
-  if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
+// // Open flaps to hang on the sides
+// function openFlaps() {
+//   if (!leftFlap || !rightFlap || !frontFlap || !backFlap) return;
 
-  flapsOpen = true;
-  const dims = boxDimensions[currentBoxType];
-  const flapWidth = dims.depth / 2;
-  const flapThickness = 0.02;
+//   flapsOpen = true;
+//   const dims = boxDimensions[currentBoxType];
+//   const flapWidth = dims.depth / 2;
+//   const flapThickness = 0.02;
 
-  // 60 degrees from horizontal = 30 degrees from vertical (π/6 radians)
-  const tiltAngle = Math.PI / 6; // 30 degrees in radians
+//   // 60 degrees from horizontal = 30 degrees from vertical (π/6 radians)
+//   const tiltAngle = Math.PI / 6; // 30 degrees in radians
 
-  // When flap tilts 60° from horizontal, the center moves outward horizontally
-  // but stays at the same vertical level (y = dims.height)
-  // Horizontal offset: (flapWidth/2) * sin(tiltAngle) - moves the center outward
-  const horizontalOffset = (flapWidth / 2) * Math.sin(tiltAngle);
+//   // When flap tilts 60° from horizontal, the center moves outward horizontally
+//   // but stays at the same vertical level (y = dims.height)
+//   // Horizontal offset: (flapWidth/2) * sin(tiltAngle) - moves the center outward
+//   const horizontalOffset = (flapWidth / 2) * Math.sin(tiltAngle);
 
-  // Front flap - tilt 60° from horizontal (30° from vertical), tilted forward (outward)
-  gsap.to(frontFlap.rotation, {
-    x: tiltAngle, // 30° tilted forward from vertical = 60° from horizontal
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(frontFlap.position, {
-    z: dims.depth / 2 + horizontalOffset, // Move outward as it tilts
-    y: dims.height, // Keep at same height - no downward movement
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Front flap - tilt 60° from horizontal (30° from vertical), tilted forward (outward)
+//   gsap.to(frontFlap.rotation, {
+//     x: tiltAngle, // 30° tilted forward from vertical = 60° from horizontal
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(frontFlap.position, {
+//     z: dims.depth / 2 + horizontalOffset, // Move outward as it tilts
+//     y: dims.height, // Keep at same height - no downward movement
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Back flap - tilt 60° from horizontal (30° from vertical), tilted backward (outward)
-  gsap.to(backFlap.rotation, {
-    x: -tiltAngle, // -30° tilted backward from vertical = 60° from horizontal
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(backFlap.position, {
-    z: -dims.depth / 2 - horizontalOffset, // Move outward as it tilts
-    y: dims.height, // Keep at same height - no downward movement
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Back flap - tilt 60° from horizontal (30° from vertical), tilted backward (outward)
+//   gsap.to(backFlap.rotation, {
+//     x: -tiltAngle, // -30° tilted backward from vertical = 60° from horizontal
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(backFlap.position, {
+//     z: -dims.depth / 2 - horizontalOffset, // Move outward as it tilts
+//     y: dims.height, // Keep at same height - no downward movement
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Left flap - tilt 60° from horizontal (30° from vertical), tilted left (outward)
-  gsap.to(leftFlap.rotation, {
-    z: tiltAngle, // 30° tilted left from vertical = 60° from horizontal
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(leftFlap.position, {
-    x: -dims.width / 2 - horizontalOffset, // Move outward as it tilts
-    y: dims.height, // Keep at same height - no downward movement
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
+//   // Left flap - tilt 60° from horizontal (30° from vertical), tilted left (outward)
+//   gsap.to(leftFlap.rotation, {
+//     z: tiltAngle, // 30° tilted left from vertical = 60° from horizontal
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(leftFlap.position, {
+//     x: -dims.width / 2 - horizontalOffset, // Move outward as it tilts
+//     y: dims.height, // Keep at same height - no downward movement
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
 
-  // Right flap - tilt 60° from horizontal (30° from vertical), tilted right (outward)
-  gsap.to(rightFlap.rotation, {
-    z: -tiltAngle, // -30° tilted right from vertical = 60° from horizontal
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-  gsap.to(rightFlap.position, {
-    x: dims.width / 2 + horizontalOffset, // Move outward as it tilts
-    y: dims.height, // Keep at same height - no downward movement
-    duration: 0.8,
-    ease: "power2.inOut",
-  });
-}
+//   // Right flap - tilt 60° from horizontal (30° from vertical), tilted right (outward)
+//   gsap.to(rightFlap.rotation, {
+//     z: -tiltAngle, // -30° tilted right from vertical = 60° from horizontal
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+//   gsap.to(rightFlap.position, {
+//     x: dims.width / 2 + horizontalOffset, // Move outward as it tilts
+//     y: dims.height, // Keep at same height - no downward movement
+//     duration: 0.8,
+//     ease: "power2.inOut",
+//   });
+// }
 
 // Update textures based on lid state (for brands with lid structure)
 function updateLidTextures() {
@@ -1256,6 +1480,91 @@ document.addEventListener("DOMContentLoaded", () => {
   // Initial visibility
   updateLidButtonVisibility();
 
+  // Custom Fields Toggle Logic
+  const boxTypeForm = document.getElementById("boxTypeForm");
+  const brandForm = document.getElementById("brandForm");
+  const customSizeFields = document.getElementById("customSizeFields");
+  const customBrandFields = document.getElementById("customBrandFields");
+
+  const customLength = document.getElementById("customLength");
+  const customWidth = document.getElementById("customWidth");
+  const customHeight = document.getElementById("customHeight");
+  const dimensionPreview = document.getElementById("dimensionPreview");
+
+  // Toggle custom size fields
+  boxTypeForm.addEventListener("change", (e) => {
+    if (e.target.value === "custom") {
+      customSizeFields.style.display = "block";
+      // Make dimension fields required
+      customLength.required = true;
+      customWidth.required = true;
+      customHeight.required = true;
+    } else {
+      customSizeFields.style.display = "none";
+      // Remove required attribute
+      customLength.required = false;
+      customWidth.required = false;
+      customHeight.required = false;
+      // Clear values
+      customLength.value = "";
+      customWidth.value = "";
+      customHeight.value = "";
+      dimensionPreview.textContent = "--";
+    }
+  });
+
+  // Toggle custom brand fields
+  brandForm.addEventListener("change", (e) => {
+    if (e.target.value === "custom") {
+      customBrandFields.style.display = "block";
+      // Make color and appliqué required
+      const colorRadios = document.querySelectorAll('input[name="boxColor"]');
+      const appliqueRadios = document.querySelectorAll(
+        'input[name="applique"]'
+      );
+      colorRadios.forEach((radio) => (radio.required = true));
+      appliqueRadios.forEach((radio) => (radio.required = true));
+    } else {
+      customBrandFields.style.display = "none";
+      // Remove required attribute and clear selections
+      const colorRadios = document.querySelectorAll('input[name="boxColor"]');
+      const appliqueRadios = document.querySelectorAll(
+        'input[name="applique"]'
+      );
+      colorRadios.forEach((radio) => {
+        radio.required = false;
+        radio.checked = false;
+      });
+      appliqueRadios.forEach((radio) => {
+        radio.required = false;
+        radio.checked = false;
+      });
+    }
+  });
+
+  // Update dimension preview in real-time
+  function updateDimensionPreview() {
+    const length = customLength.value;
+    const width = customWidth.value;
+    const height = customHeight.value;
+
+    if (length && width && height) {
+      dimensionPreview.textContent = `${length} × ${width} × ${height} mm`;
+    } else if (length || width || height) {
+      const parts = [];
+      if (length) parts.push(length);
+      if (width) parts.push(width);
+      if (height) parts.push(height);
+      dimensionPreview.textContent = parts.join(" × ") + " mm (incomplete)";
+    } else {
+      dimensionPreview.textContent = "--";
+    }
+  }
+
+  customLength.addEventListener("input", updateDimensionPreview);
+  customWidth.addEventListener("input", updateDimensionPreview);
+  customHeight.addEventListener("input", updateDimensionPreview);
+
   // Form submission
   document.getElementById("customBoxForm").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1272,6 +1581,29 @@ document.addEventListener("DOMContentLoaded", () => {
       newsletter: document.getElementById("newsletter").checked,
     };
 
+    // Add custom size data if applicable
+    if (formData.boxType === "custom") {
+      formData.customDimensions = {
+        length: customLength.value,
+        width: customWidth.value,
+        height: customHeight.value,
+      };
+    }
+
+    // Add custom brand data if applicable
+    if (formData.brand === "custom") {
+      const selectedColor = document.querySelector(
+        'input[name="boxColor"]:checked'
+      );
+      const selectedApplique = document.querySelector(
+        'input[name="applique"]:checked'
+      );
+      formData.customBrand = {
+        color: selectedColor ? selectedColor.value : null,
+        applique: selectedApplique ? selectedApplique.value : null,
+      };
+    }
+
     console.log("Form submitted:", formData);
 
     document.getElementById("customBoxForm").style.display = "none";
@@ -1281,6 +1613,10 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("customBoxForm").reset();
       document.getElementById("customBoxForm").style.display = "block";
       document.getElementById("formSuccess").style.display = "none";
+      // Reset custom fields
+      customSizeFields.style.display = "none";
+      customBrandFields.style.display = "none";
+      dimensionPreview.textContent = "--";
     }, 5000);
   });
 

@@ -33,7 +33,7 @@
         </div>
 
         <div class="config-section">
-          <h3>Brand</h3>
+          <h3>Our brands</h3>
           <div class="brand-grid">
             <button class="brand-btn active" data-brand="FRUTANA">
               <span>FRUTANA</span>
@@ -147,6 +147,65 @@
               </select>
             </div>
 
+            <!-- Custom Size Fields (hidden by default) -->
+            <div
+              id="customSizeFields"
+              class="custom-fields"
+              style="display: none"
+            >
+              <div class="custom-fields-header">
+                <h4>📏 Custom Box Dimensions</h4>
+                <p class="field-subtitle">
+                  Enter dimensions in millimeters (mm)
+                </p>
+              </div>
+              <div class="dimension-grid">
+                <div class="form-group">
+                  <label for="customLength">
+                    <span class="dimension-icon">↔️</span> Length (mm) *
+                  </label>
+                  <input
+                    type="number"
+                    id="customLength"
+                    name="customLength"
+                    min="1"
+                    step="0.1"
+                    placeholder="e.g., 500"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="customWidth">
+                    <span class="dimension-icon">↕️</span> Width (mm) *
+                  </label>
+                  <input
+                    type="number"
+                    id="customWidth"
+                    name="customWidth"
+                    min="1"
+                    step="0.1"
+                    placeholder="e.g., 300"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="customHeight">
+                    <span class="dimension-icon">⬆️</span> Height (mm) *
+                  </label>
+                  <input
+                    type="number"
+                    id="customHeight"
+                    name="customHeight"
+                    min="1"
+                    step="0.1"
+                    placeholder="e.g., 250"
+                  />
+                </div>
+              </div>
+              <div class="dimension-preview">
+                <span class="preview-label">Preview:</span>
+                <span id="dimensionPreview" class="preview-text">--</span>
+              </div>
+            </div>
+
             <div class="form-group">
               <label for="brandForm">Desired Brand *</label>
               <select id="brandForm" name="brandForm" required>
@@ -158,6 +217,135 @@
                 <option value="FRUTALUXE">FRUTALUXE</option>
                 <option value="custom">Custom Brand</option>
               </select>
+            </div>
+
+            <!-- Custom Brand Fields (hidden by default) -->
+            <div
+              id="customBrandFields"
+              class="custom-fields"
+              style="display: none"
+            >
+              <div class="custom-fields-header">
+                <h4>🎨 Custom Brand Design</h4>
+                <p class="field-subtitle">
+                  Choose your box color and appliqué design
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label for="boxColor">Box Color *</label>
+                <div class="color-picker-group">
+                  <div class="color-options">
+                    <label class="color-option" data-color="#FFE135">
+                      <input
+                        type="radio"
+                        name="boxColor"
+                        value="yellow"
+                        required
+                      />
+                      <span
+                        class="color-swatch"
+                        style="background-color: #ffe135"
+                      ></span>
+                      <span class="color-name">Banana Yellow</span>
+                    </label>
+                    <label class="color-option" data-color="#8BC34A">
+                      <input type="radio" name="boxColor" value="green" />
+                      <span
+                        class="color-swatch"
+                        style="background-color: #8bc34a"
+                      ></span>
+                      <span class="color-name">Fresh Green</span>
+                    </label>
+                    <label class="color-option" data-color="#FF9800">
+                      <input type="radio" name="boxColor" value="orange" />
+                      <span
+                        class="color-swatch"
+                        style="background-color: #ff9800"
+                      ></span>
+                      <span class="color-name">Tropical Orange</span>
+                    </label>
+                    <label class="color-option" data-color="#795548">
+                      <input type="radio" name="boxColor" value="brown" />
+                      <span
+                        class="color-swatch"
+                        style="background-color: #795548"
+                      ></span>
+                      <span class="color-name">Natural Brown</span>
+                    </label>
+                    <label class="color-option" data-color="#FFFFFF">
+                      <input type="radio" name="boxColor" value="white" />
+                      <span
+                        class="color-swatch"
+                        style="
+                          background-color: #ffffff;
+                          border: 2px solid #ddd;
+                        "
+                      ></span>
+                      <span class="color-name">Classic White</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="applique">Appliqué Design *</label>
+                <div class="applique-grid">
+                  <label class="applique-card">
+                    <input
+                      type="radio"
+                      name="applique"
+                      value="banana-leaves"
+                      required
+                    />
+                    <div class="applique-content">
+                      <div class="applique-icon">🍃</div>
+                      <span class="applique-name">Banana Leaves</span>
+                      <p class="applique-desc">Tropical leaf pattern</p>
+                    </div>
+                  </label>
+                  <label class="applique-card">
+                    <input
+                      type="radio"
+                      name="applique"
+                      value="banana-pattern"
+                    />
+                    <div class="applique-content">
+                      <div class="applique-icon">🍌</div>
+                      <span class="applique-name">Banana Pattern</span>
+                      <p class="applique-desc">Repeating banana motif</p>
+                    </div>
+                  </label>
+                  <label class="applique-card">
+                    <input
+                      type="radio"
+                      name="applique"
+                      value="tropical-fruits"
+                    />
+                    <div class="applique-content">
+                      <div class="applique-icon">🥭</div>
+                      <span class="applique-name">Tropical Fruits</span>
+                      <p class="applique-desc">Mixed fruit design</p>
+                    </div>
+                  </label>
+                  <label class="applique-card">
+                    <input type="radio" name="applique" value="geometric" />
+                    <div class="applique-content">
+                      <div class="applique-icon">◆</div>
+                      <span class="applique-name">Geometric</span>
+                      <p class="applique-desc">Modern geometric style</p>
+                    </div>
+                  </label>
+                  <label class="applique-card">
+                    <input type="radio" name="applique" value="minimalist" />
+                    <div class="applique-content">
+                      <div class="applique-icon">▭</div>
+                      <span class="applique-name">Minimalist</span>
+                      <p class="applique-desc">Clean, simple design</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
