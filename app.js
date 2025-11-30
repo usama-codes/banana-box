@@ -892,7 +892,7 @@ async function createBananas(dims) {
     const scaleX = cellX / bananaSize.x;
     const scaleY = cellY / bananaSize.y;
     const scaleZ = cellZ / bananaSize.z;
-    const scaleFactor = Math.min(scaleX, scaleY, scaleZ);
+    const scaleFactor = Math.min(scaleX, scaleY, scaleZ) * 1.5; // Increased banana size by 40%
 
     // Calculate scaled banana size (for logging)
     const scaledBananaSize = bananaSize.clone().multiplyScalar(scaleFactor);
@@ -1032,7 +1032,7 @@ async function createBananas(dims) {
     const bananaLength = 0.6;
 
     // Scale fallback bananas to fit box
-    const maxLength = Math.min(dims.width, dims.depth) * 0.4;
+    const maxLength = Math.min(dims.width, dims.depth) * 0.55;
     const scaleFactor = maxLength / bananaLength;
     const scaledRadius = bananaRadius * scaleFactor;
     const scaledLength = bananaLength * scaleFactor;
